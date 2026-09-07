@@ -1,0 +1,180 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Events;
+
+namespace EcoDeLasCenizas.Gameplay
+{
+    public enum CharacterClass
+    {
+        Engineer,
+        Explorer,
+        Scientist,
+        Tactician
+    }
+
+    public enum PolicyOption
+    {
+        OptionA_ProductionPriority,   // 70% Energy to Greenhouses
+        OptionB_DefensePriority,      // 70% Energy to Wall Thermal Shields
+        OptionC_OverchargeReactor     // Convert Ignicita into massive heat pulse
+    }
+
+    [System.Serializable]
+    public class CouncilVoteSession
+    {
+        public string proposalTitle;
+        public string proposalDescription;
+        public float votingTimeRemaining = 30f;
+        public bool isSessionActive = false;
+
+        public Dictionary<PolicyOption, float> voteTally = new Dictionary<PolicyOption, float>();
+    }
+
+    /// <summary>
+    /// Manages the democratic Council voting sessions for distributing scarce community resources.
+    /// Incorporates weighted class votes (e.g. Engineer x2 on infrastructure, Scientist x2 on food).
+    /// </summary>
+    public class CouncilVotingManager : MonoBehaviour
+    {
+        public static CouncilVotingManager Instance { get; private set; }
+
+        [Header("Active Session")]
+        [SerializeField] private CouncilVoteSession currentSession;
+
+        [Header("Events")]
+        public UnityEvent<CouncilVoteSession> OnVotingStarted;
+        public UnityEvent<PolicyOption, float> OnVoteCast;
+        public UnityEvent<PolicyOption> OnVotingEnded;
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            Instance = this;
+        }
+
+        /// <summary>
+        /// Starts a new Council Voting Session.
+        /// </summary>
+        public void StartVotingSession(string title, string description, float duration = 30f)
+        {
+            currentSession = new CouncilVoteSession
+            {
+                proposalTitle = title,
+                proposalDescription = description,
+                votingTimeRemaining = duration,
+                isSessionActive = true
+            };
+
+            currentSession.voteTally[PolicyOption.OptionA_ProductionPriority] = 0f;
+            currentSession.voteTally[PolicyOption.OptionB_DefensePriority] = 0f;
+            currentSession.voteTally[PolicyOption.OptionC_OverchargeReactor] = 0f;
+
+            Debug.Log($"[CouncilVotingManager] VOTING STARTED: {title}");
+            OnVotingStarted?.Invoke(currentSession);
+        }
+
+        private void Update()
+        {
+            if (currentSession != null && currentSession.isSessionActive)
+            {
+                currentSession.votingTimeRemaining -= Time.deltaTime;
+                if (currentSession.votingTimeRemaining <= 0f)
+                {
+                    EndVotingSession();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Casts a vote weighted by the player's character class.
+        /// </summary>
+        public void CastVote(CharacterClass playerClass, PolicyOption chosenOption)
+        {
+            if (currentSession == null || !currentSession.isSessionActive)
+            {
+                Debug.LogWarning("[CouncilVotingManager] Attempted to vote while no session is active.");
+                return;
+            }
+
+            float voteWeight = GetVoteWeightForClass(playerClass, chosenOption);
+            currentSession.voteTally[chosenOption] += voteWeight;
+
+            Debug.Log($"[CouncilVotingManager] Vote cast by {playerClass} for {chosenOption} (Weight: {voteWeight}). New Total: {currentSession.voteTally[chosenOption]}");
+            OnVoteCast?.Invoke(chosenOption, currentSession.voteTally[chosenOption]);
+        }
+
+        /// <summary>
+        /// Calculates vote multiplier weight based on class expertise.
+        /// </summary>
+        private float GetVoteWeightForClass(CharacterClass pClass, PolicyOption option)
+        {
+            switch (option)
+            {
+                case PolicyOption.OptionA_ProductionPriority:
+                    return pClass == CharacterClass.Scientist ? 2.0f : 1.0f;
+
+                case PolicyOption.OptionB_DefensePriority:
+                    return (pClass == CharacterClass.Tactician || pClass == CharacterClass.Engineer) ? 2.0f : 1.0f;
+
+                case PolicyOption.OptionC_OverchargeReactor:
+                    return pClass == CharacterClass.Engineer ? 2.5f : 1.0f;
+
+                default:
+                    return 1.0f;
+            }
+        }
+
+        /// <summary>
+        /// Finalizes voting and resolves winning policy.
+        /// </summary>
+        public void EndVotingSession()
+        {
+            if (currentSession == null || !currentSession.isSessionActive) return;
+
+            currentSession.isSessionActive = false;
+
+            PolicyOption winningOption = PolicyOption.OptionA_ProductionPriority;
+            float highestVotes = -1f;
+
+            foreach (var kvp in currentSession.voteTally)
+            {
+                if (kvp.Value > highestVotes)
+                {
+                    highestVotes = kvp.Value;
+                    winningOption = kvp.Key;
+                }
+            }
+
+            Debug.Log($"[CouncilVotingManager] VOTING CONCLUDED. Winning Policy: {winningOption} with {highestVotes} weighted votes.");
+            ApplyPolicyEffects(winningOption);
+
+            OnVotingEnded?.Invoke(winningOption);
+        }
+
+        private void ApplyPolicyEffects(PolicyOption option)
+        {
+            switch (option)
+            {
+                case PolicyOption.OptionA_ProductionPriority:
+                    Debug.Log("[Council Policy] +50% Greenhouse Efficiency active. Wall defenses unpowered.");
+                    break;
+
+                case PolicyOption.OptionB_DefensePriority:
+                    Debug.Log("[Council Policy] Wall Thermal Shields Activated (+30% Wall Resistance). Residential heat reduced.");
+                    break;
+
+                case PolicyOption.OptionC_OverchargeReactor:
+                    Debug.Log("[Council Policy] Reactor Overcharged! +15°C Temperature surge.");
+                    if (EcoDeLasCenizas.Core.ReactorManager.Instance != null)
+                    {
+                        EcoDeLasCenizas.Core.ReactorManager.Instance.DepositIgnicita(50f);
+                    }
+                    break;
+            }
+        }
+    }
+}
