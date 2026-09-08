@@ -8,22 +8,24 @@
 
 - 📖 **Game Design Document (GDD PvPvE):** [`GDD_Eco_de_las_Cenizas.md`](./GDD_Eco_de_las_Cenizas.md)
 - 📊 **Especificaciones Técnicas:** [`docs/Technical_Specifications.md`](./docs/Technical_Specifications.md)
+- 🤖 **Manifiesto de Permisos Android:** [`Plugins/Android/AndroidManifest.xml`](./Plugins/Android/AndroidManifest.xml)
 
 ---
 
-## 📱📱 Soporte Multiplataforma Cross-Play (PC & Android)
+## 📱📱 Permisos y Soporte Multiplataforma Android
 
-1. **HUD Táctil Móvil (`TouchScreenHUD.cs`):**
+1. **Manifiesto de Permisos (`Plugins/Android/AndroidManifest.xml`):**
+   - Configura permisos requeridos para multijugador y chat de voz: `INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`.
+2. **Gestor de Permisos Runtime (`AndroidPermissionsManager.cs`):**
+   - Comprueba y solicita permisos al iniciar la app en Android utilizando `UnityEngine.Android.Permission`. Muestra una advertencia en la UI si un permiso crítico es rechazado.
+3. **HUD Táctil Móvil (`TouchScreenHUD.cs`):**
    - Interfaz gráfica táctil con Joystick virtual para movimiento 3D y botones dinámicos para salto, interacción y habilidades.
-   - Activación automática en plataformas móviles (`Application.isMobilePlatform`).
-2. **Controles Adaptativos (`PlayerController.cs`):**
-   - Responde automáticamente a entradas de Teclado/Mouse (PC) y Touch/Virtual Joystick (Android).
-3. **Gestor de Calidad Gráfica (`QualitySettingsManager.cs`):**
+4. **Gestor de Calidad Gráfica (`QualitySettingsManager.cs`):**
    - Ajusta dinámicamente sombras, distancia de dibujado y límites de textura para garantizar 30–60 FPS en móviles.
 
 ---
 
-## 🛠️ Instrucciones para Compilar la Build de PC (.exe) y Android (.apk)
+## 🛠️ Instrucciones de Exportación en Unity (.apk / .aab)
 
 ### 💻 Compilación para PC Windows (.exe)
 1. Abre Unity Editor en **PC, Mac & Linux Standalone**.
@@ -31,19 +33,25 @@
 3. Selecciona **Standalone Windows (x86_64)** como plataforma objetivo.
 4. Haz clic en **Build** y guarda el ejecutable `.exe`.
 
-### 📱 Compilación para Android (.apk)
+### 📱 Compilación para Android (.apk / .aab)
 1. Ve a `File -> Build Settings`.
 2. Selecciona la plataforma **Android** y haz clic en **Switch Platform**.
 3. Asegúrate de tener instalado el **Android NDK/SDK** en Unity Hub.
-4. En *Player Settings -> Identification*, configura el **Package Name** (ej: `com.ecodelascenizas.game`).
-5. Haz clic en **Build** para generar el archivo `.apk` instalable.
+4. **Para archivo ejecutable directo (.apk):**
+   - Desmarca la opción *Build App Bundle (.aab)*.
+   - Haz clic en **Build** para generar el archivo `.apk` e instalarlo vía APK Installer o ADB (`adb install app.apk`).
+5. **Para archivo de publicación Google Play Store (.aab):**
+   - Marca la casilla **Build App Bundle (.aab)**.
+   - Configura tu KeyStore en *Player Settings -> Publishing Settings*.
+   - Haz clic en **Build** para generar el archivo `.aab` listo para subir a Google Play Console.
 
 ---
 
-## 📂 Estructura del Código C# (25 Scripts)
+## 📂 Estructura del Código C# (26 Scripts)
 
 | Script | Descripción y Función Principal |
 | :--- | :--- |
+| `AndroidPermissionsManager.cs` | Gestión de permisos runtime en Android (`UnityEngine.Android.Permission`) y alerta UI. |
 | `TouchScreenHUD.cs` | UI móvil táctil con Joystick virtual y botones para salto, interacción y habilidades. |
 | `QualitySettingsManager.cs` | Optimización gráfica adaptativa para PC (60 FPS) y Android (30-60 FPS). |
 | `SeasonManager.cs` | Reloj de temporada de 14 días (4 fases), inmunidad de saqueo en Fase 1, impuesto del 5% y reinicio. |

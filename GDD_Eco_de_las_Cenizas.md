@@ -2,7 +2,7 @@
 # Eco de las Cenizas - Modo PvPvE Cross-Play (PC y Android)
 
 **Género:** Multijugador PvPvE Cooperativo 3D / Guerra de Clanes / Supervivencia Cross-Play
-**Plataforma Objetivo:** PC Windows / Android / iOS / Consolas de última generación
+**Plataforma Objetivo:** PC Windows / Android (.apk / .aab) / iOS / Consolas de última generación
 **Perspectiva:** Tercera Persona (3D Action/Survival & Base Management)
 **Público Objetivo:** Jugadores de supervivencia cooperativa y competitiva (ej. *Rust*, *Helldivers 2*, *Division 2 Dark Zone*, *Frostpunk*).
 
@@ -12,7 +12,11 @@
 
 **Eco de las Cenizas** está diseñado desde su arquitectura base para ser **100% Cross-Play entre PC y dispositivos móviles (Android/iOS)**.
 
-### **1.1. HUD Táctil Móvil y Controles Adaptativos**
+### **1.1. Gestión de Permisos Android y Seguridad**
+- **Manifiesto de Permisos (`Plugins/Android/AndroidManifest.xml`):** Declara permisos para comunicación en red (`INTERNET`, `ACCESS_NETWORK_STATE`), chat de voz (`RECORD_AUDIO`), almacenamiento (`WRITE_EXTERNAL_STORAGE`) y prevención de suspensión (`WAKE_LOCK`).
+- **Comprobación en Tiempo de Ejecución (`AndroidPermissionsManager`):** Comprueba y solicita permisos al iniciar la aplicación usando `UnityEngine.Android.Permission`. Muestra una alerta en UI si un permiso crítico multijugador/voz es denegado.
+
+### **1.2. HUD Táctil Móvil y Controles Adaptativos**
 - **Soporte Móvil (`TouchScreenHUD`):** Joystick virtual dinámico para movimiento 3D y botones táctiles dedicados para salto, interacción y habilidades.
 - **Entrada Adaptativa (`PlayerController`):** El personaje detecta y responde en tiempo real tanto a combinación de Teclado/Mouse como a toques en pantalla táctil.
 - **Optimizador de Calidad (`QualitySettingsManager`):** En Android reduce automáticamente las sombras y la distancia de renderizado a 150m para garantizar 30–60 FPS estables durante sesiones Cross-Play.
