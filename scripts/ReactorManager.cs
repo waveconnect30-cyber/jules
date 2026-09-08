@@ -6,11 +6,15 @@ namespace EcoDeLasCenizas.Core
 {
     /// <summary>
     /// Manages the Central Geothermal Reactor, Ignicita fuel consumption, city temperature decay,
-    /// and global penalties for freezing conditions (-10°C threshold).
+    /// cityID ownership in PvPvE mode, and global penalties for freezing conditions (-10°C threshold).
     /// </summary>
     public class ReactorManager : MonoBehaviour
     {
         public static ReactorManager Instance { get; private set; }
+
+        [Header("City Faction Ownership")]
+        [Tooltip("The City / Clan ID that owns this reactor.")]
+        [SerializeField] private int cityID = 1;
 
         [Header("Reactor Fuel Settings")]
         [Tooltip("Current amount of Ignicita fuel stored in the central reactor container.")]
@@ -50,6 +54,7 @@ namespace EcoDeLasCenizas.Core
         public UnityEvent OnCityFrozenSolid;
 
         // Public Read-only Properties
+        public int CityID => cityID;
         public float CurrentIgnicita => currentIgnicita;
         public float MaxIgnicita => maxIgnicita;
         public float CurrentTemperature => currentTemperature;
@@ -60,7 +65,7 @@ namespace EcoDeLasCenizas.Core
         {
             if (Instance != null && Instance != this)
             {
-                Destroy(gameObject);
+                // In multi-city mode, multiple reactor instances exist per cityID
                 return;
             }
             Instance = this;
@@ -78,15 +83,10 @@ namespace EcoDeLasCenizas.Core
             ProcessReactorCycle(Time.deltaTime);
         }
 
-        /// <summary>
-        /// Updates fuel consumption and temperature decay every frame.
-        /// </summary>
-
         public void ProcessReactorCycle(float deltaTime)
         {
             if (currentIgnicita > 0f)
             {
-                // Consume Ignicita every second
                 currentIgnicita -= ignicitaConsumptionRate * deltaTime;
                 if (currentIgnicita < 0f)
                 {
@@ -96,7 +96,6 @@ namespace EcoDeLasCenizas.Core
             }
             else
             {
-                // When Ignicita reaches 0, temperature drops by -5°C per minute (-5 / 60 per second)
                 float tempLossThisFrame = (temperatureDecayRatePerMinute / 60.0f) * deltaTime;
                 currentTemperature -= tempLossThisFrame;
                 OnTemperatureChanged?.Invoke(currentTemperature);
@@ -105,9 +104,6 @@ namespace EcoDeLasCenizas.Core
             }
         }
 
-        /// <summary>
-        /// Evaluates current temperature against critical thresholds (-10°C).
-        /// </summary>
         private void EvaluateTemperatureEffects()
         {
             bool shouldBeFrozen = currentTemperature <= criticalTemperatureThreshold;
@@ -117,14 +113,14 @@ namespace EcoDeLasCenizas.Core
                 if (isGreenhouseActive)
                 {
                     isGreenhouseActive = false;
-                    Debug.LogWarning("[ReactorManager] CRITICAL WARNING: Temperature dropped below -10°C! Greenhouses DISABLED.");
+                    Debug.LogWarning($"[ReactorManager City:{cityID}] CRITICAL WARNING: Temperature dropped below -10°C! Greenhouses DISABLED.");
                     OnGreenhouseStatusChanged?.Invoke(false);
                 }
 
                 if (!isMovementSlowed)
                 {
                     isMovementSlowed = true;
-                    Debug.LogWarning("[ReactorManager] CRITICAL WARNING: Freezing weather reduces player movement speed by 20%.");
+                    Debug.LogWarning($"[ReactorManager City:{cityID}] CRITICAL WARNING: Freezing weather reduces player movement speed by 20%.");
                     OnPlayerMovementPenaltyChanged?.Invoke(true);
                 }
             }
@@ -133,14 +129,14 @@ namespace EcoDeLasCenizas.Core
                 if (!isGreenhouseActive)
                 {
                     isGreenhouseActive = true;
-                    Debug.Log("[ReactorManager] Temperature restored above -10°C. Greenhouses RE-ENABLED.");
+                    Debug.Log($"[ReactorManager City:{cityID}] Temperature restored above -10°C. Greenhouses RE-ENABLED.");
                     OnGreenhouseStatusChanged?.Invoke(true);
                 }
 
                 if (isMovementSlowed)
                 {
                     isMovementSlowed = false;
-                    Debug.Log("[ReactorManager] Temperature restored. Player movement speed NORMALIZED.");
+                    Debug.Log($"[ReactorManager City:{cityID}] Temperature restored. Player movement speed NORMALIZED.");
                     OnPlayerMovementPenaltyChanged?.Invoke(false);
                 }
             }
@@ -152,21 +148,29 @@ namespace EcoDeLasCenizas.Core
         }
 
         /// <summary>
-        /// Allows players to deposit Ignicita into the global shared container.
-        /// Increases fuel reserve and raises city temperature.
+        /// Deposit Ignicita fuel into reactor. Accepts deposits only from matching cityID survivors.
         /// </summary>
-        /// <param name="amount">Amount of Ignicita deposited.</param>
+        public void DepositIgnicita(float amount, int depositorCityID)
+        {
+            if (depositorCityID != cityID)
+            {
+                Debug.LogWarning($"[ReactorManager City:{cityID}] Rejected deposit from enemy player (CityID:{depositorCityID}).");
+                return;
+            }
+
+            DepositIgnicita(amount);
+        }
+
         public void DepositIgnicita(float amount)
         {
             if (amount <= 0f) return;
 
             currentIgnicita = Mathf.Min(currentIgnicita + amount, maxIgnicita);
 
-            // Warm up city upon adding Ignicita fuel
             float tempIncrease = amount * temperatureGainPerIgnicita;
             currentTemperature = Mathf.Min(currentTemperature + tempIncrease, maxTemperature);
 
-            Debug.Log($"[ReactorManager] Deposited {amount} Ignicita. New Total Fuel: {currentIgnicita:F1}, New Temp: {currentTemperature:F1}°C");
+            Debug.Log($"[ReactorManager City:{cityID}] Deposited {amount} Ignicita. New Fuel: {currentIgnicita:F1}, New Temp: {currentTemperature:F1}°C");
 
             OnIgnicitaChanged?.Invoke(currentIgnicita);
             OnTemperatureChanged?.Invoke(currentTemperature);

@@ -23,12 +23,16 @@ namespace EcoDeLasCenizas.Networking
     }
 
     /// <summary>
-    /// Synchronizes the Hit Points (HP) of the 4 city wall sections across all multiplayer clients
-    /// in real-time using Mirror / Photon networking in Unity.
+    /// Synchronizes the HP of 4 city wall sections per cityID across all multiplayer clients in PvPvE mode.
+    /// Allows repairs by same-city survivors and attacks/damage by enemy city players or AI.
     /// </summary>
     public class CityWallHealthSync : NetworkBehaviour
     {
         public static CityWallHealthSync Instance { get; private set; }
+
+        [Header("City Faction Ownership")]
+        [Tooltip("City ID that owns this wall perimeter.")]
+        [SyncVar] public int cityID = 1;
 
         [Header("Wall Health State (Synced across network)")]
         public readonly SyncList<WallStatus> wallSections = new SyncList<WallStatus>();
@@ -47,7 +51,6 @@ namespace EcoDeLasCenizas.Networking
         {
             if (Instance != null && Instance != this)
             {
-                Destroy(gameObject);
                 return;
             }
             Instance = this;
@@ -74,12 +77,12 @@ namespace EcoDeLasCenizas.Networking
             wallSections.Add(new WallStatus { section = WallSection.East,  currentHP = eastWallMaxHP,  maxHP = eastWallMaxHP });
             wallSections.Add(new WallStatus { section = WallSection.West,  currentHP = westWallMaxHP,  maxHP = westWallMaxHP });
 
-            Debug.Log("[CityWallHealthSync] Initialized 4 wall sections on Server.");
+            Debug.Log($"[CityWallHealthSync City:{cityID}] Initialized 4 wall sections on Server.");
         }
 
         private void OnWallSectionsListChanged(SyncList<WallStatus>.Operation op, int index, WallStatus oldItem, WallStatus newItem)
         {
-            Debug.Log($"[CityWallHealthSync Client] Wall {newItem.section} updated: {newItem.currentHP}/{newItem.maxHP} HP ({newItem.HealthPercentage:F1}%)");
+            Debug.Log($"[CityWallHealthSync City:{cityID}] Wall {newItem.section} updated: {newItem.currentHP}/{newItem.maxHP} HP ({newItem.HealthPercentage:F1}%)");
             OnWallHealthUpdated?.Invoke(newItem.section, newItem.currentHP, newItem.maxHP);
 
             if (newItem.currentHP <= 0f && oldItem.currentHP > 0f)
@@ -89,11 +92,17 @@ namespace EcoDeLasCenizas.Networking
         }
 
         /// <summary>
-        /// Applies damage to a specific wall section on the server.
+        /// Applies damage to a specific wall section. Accepts damage from hostile cityIDs or AI (-1).
         /// </summary>
         [Server]
-        public void DamageWall(WallSection section, float damageAmount)
+        public void DamageWall(WallSection section, float damageAmount, int attackerCityID = -1)
         {
+            if (attackerCityID == cityID)
+            {
+                Debug.LogWarning($"[CityWallHealthSync City:{cityID}] Prevented friendly fire damage from player in City {attackerCityID}.");
+                return;
+            }
+
             int index = (int)section;
             if (index < 0 || index >= wallSections.Count) return;
 
@@ -101,7 +110,7 @@ namespace EcoDeLasCenizas.Networking
             status.currentHP = Mathf.Max(0f, status.currentHP - damageAmount);
             wallSections[index] = status;
 
-            RpcNotifyWallDamaged(section, status.currentHP, damageAmount);
+            RpcNotifyWallDamaged(section, status.currentHP, damageAmount, attackerCityID);
 
             if (status.currentHP <= 0f)
             {
@@ -110,11 +119,17 @@ namespace EcoDeLasCenizas.Networking
         }
 
         /// <summary>
-        /// Repairs a specific wall section on the server.
+        /// Repairs a wall section. Only same-city members (matching cityID) can repair.
         /// </summary>
         [Server]
-        public void RepairWall(WallSection section, float repairAmount)
+        public void RepairWall(WallSection section, float repairAmount, int repairerCityID)
         {
+            if (repairerCityID != cityID)
+            {
+                Debug.LogWarning($"[CityWallHealthSync City:{cityID}] Rejected repair attempt by foreign CityID {repairerCityID}.");
+                return;
+            }
+
             int index = (int)section;
             if (index < 0 || index >= wallSections.Count) return;
 
@@ -126,21 +141,21 @@ namespace EcoDeLasCenizas.Networking
         }
 
         [ClientRpc]
-        private void RpcNotifyWallDamaged(WallSection section, float newHP, float damageDealt)
+        private void RpcNotifyWallDamaged(WallSection section, float newHP, float damageDealt, int attackerCityID)
         {
-            Debug.LogWarning($"[CityWallHealthSync RPC] {section} Wall damaged by {damageDealt}. Remaining HP: {newHP}");
+            Debug.LogWarning($"[CityWallHealthSync RPC City:{cityID}] {section} Wall damaged by {damageDealt} from CityID {attackerCityID}. Remaining HP: {newHP}");
         }
 
         [ClientRpc]
         private void RpcNotifyWallRepaired(WallSection section, float newHP, float amountRepaired)
         {
-            Debug.Log($"[CityWallHealthSync RPC] {section} Wall repaired by {amountRepaired}. Current HP: {newHP}");
+            Debug.Log($"[CityWallHealthSync RPC City:{cityID}] {section} Wall repaired by {amountRepaired}. Current HP: {newHP}");
         }
 
         [ClientRpc]
         private void RpcNotifyWallBreached(WallSection section)
         {
-            Debug.LogError($"[CityWallHealthSync CRITICAL] {section} Wall HAS BEEN BREACHED BY THE FROZEN SHADOWS!");
+            Debug.LogError($"[CityWallHealthSync CRITICAL City:{cityID}] {section} Wall HAS BEEN BREACHED!");
         }
 
         public WallStatus GetWallStatus(WallSection section)

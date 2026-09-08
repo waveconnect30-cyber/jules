@@ -19,11 +19,16 @@ namespace EcoDeLasCenizas.Player
 
     /// <summary>
     /// Comprehensive 3D Player Controller handling third-person locomotion, jumping,
-    /// raycast interaction with IInteractable objects, and dynamic freezing speed penalties (-20%).
+    /// raycast interaction with IInteractable objects, faction affiliation (cityID),
+    /// and dynamic freezing speed penalties (-20%).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class PlayerController : MonoBehaviour
     {
+        [Header("Faction & City Ownership")]
+        [Tooltip("ID of the city/clan this survivor belongs to in PvPvE mode.")]
+        public int cityID = 1;
+
         [Header("Class & Identity")]
         [SerializeField] private CharacterClass characterClass = CharacterClass.Explorer;
 
@@ -60,7 +65,7 @@ namespace EcoDeLasCenizas.Player
         {
             ApplyClassStats();
 
-            if (ReactorManager.Instance != null)
+            if (ReactorManager.Instance != null && ReactorManager.Instance.CityID == cityID)
             {
                 ReactorManager.Instance.OnPlayerMovementPenaltyChanged.AddListener(OnFreezingPenaltyUpdated);
                 OnFreezingPenaltyUpdated(ReactorManager.Instance.IsMovementSlowed);
@@ -150,7 +155,7 @@ namespace EcoDeLasCenizas.Player
                     IInteractable interactable = hit.collider.GetComponent<IInteractable>();
                     if (interactable != null)
                     {
-                        Debug.Log($"[PlayerController] Interacting with {hit.collider.gameObject.name}");
+                        Debug.Log($"[PlayerController City:{cityID}] Interacting with {hit.collider.gameObject.name}");
                         interactable.Interact(this);
                     }
                 }
@@ -176,7 +181,7 @@ namespace EcoDeLasCenizas.Player
         public void OnFreezingPenaltyUpdated(bool isFreezingActive)
         {
             movementSpeedMultiplier = isFreezingActive ? 0.80f : 1.0f;
-            Debug.Log($"[PlayerController] Movement speed multiplier set to {movementSpeedMultiplier * 100}% due to freezing alert ({isFreezingActive}).");
+            Debug.Log($"[PlayerController City:{cityID}] Movement speed multiplier set to {movementSpeedMultiplier * 100}% due to freezing alert ({isFreezingActive}).");
         }
     }
 }
