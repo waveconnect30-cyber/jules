@@ -5,7 +5,7 @@
 ---
 
 ## 📌 Referencia de Entrega
-**CODEX-5AC805E-GENERADOR-COMPLETO**
+**CODEX-957AFB5-TRASPASO-LOCAL**
 
 ---
 
@@ -21,53 +21,53 @@
 
 ---
 
-## 🛠️ Generador de Escena y Prefabs en Unity 2022.3 LTS
+## 🛠️ Generador de Escena, Prefabs y HUD en Unity 2022.3 LTS
 
-Para generar la escena y los prefabs reales con componentes nativos de Unity/Mirror:
+Para generar la escena, los prefabs y el HUD de Canvas real con componentes nativos de Unity y Mirror Networking:
 
 1. Abre el proyecto en **Unity 2022.3 LTS**.
 2. En la barra de menú superior, selecciona:
    `EcoDeLasCenizas -> Build Real Test Scene and Prefabs`
 3. Se generarán automáticamente:
-   - `Assets/Prefabs/PlayerPrefab.prefab` (Capsule + NetworkIdentity + NetworkTransformUnreliable + PlayerController + PlayerStatsManager + ClassAbilities)
+   - `Assets/Prefabs/PlayerPrefab.prefab` (Capsule + NetworkIdentity + NetworkTransformUnreliable [ClientToServer authority] + PlayerController + PlayerStatsManager + ClassAbilities)
    - `Assets/Prefabs/ReactorPrefab.prefab` (Cylinder + NetworkIdentity + ReactorManager + ReactorDepositContainer)
    - `Assets/Prefabs/CityWallPrefab.prefab` (Cube + NetworkIdentity + CityWallHealthSync + CityWallRepairPanel)
    - `Assets/Prefabs/ResourceNodePrefab.prefab` (Sphere + NetworkIdentity + IgnicitaHarvestNode)
-   - `Assets/Scenes/TestScene.unity` (Light, Ground Plane, Camera, AudioListener, NetworkManagerHUD, GameManager, Spanish Canvas HUD, SpawnPoints)
-4. `Assets/Scenes/TestScene.unity` se registrará en `EditorBuildSettings.scenes`.
+   - `Assets/Scenes/TestScene.unity` (Light, Ground Plane, Camera, AudioListener, NetworkManager [KcpTransport + NetworkLobbyManager + NetworkManagerHUD], GameManager, AssetPrefabLinker, Canvas HUD con TextMeshProUGUI/Sliders/WarningBanner, SpawnPoints)
+4. `Assets/Scenes/TestScene.unity` se registrará en `EditorBuildSettings.scenes` conservando las escenas previas existentes.
 
 ---
 
-## 🔒 Conservación Atómica de Recursos y Ejemplos Antes/Después
+## 🔒 Configuración de Red, Transmisión Serializada y Defectos Documentados
 
-### **1. Depósito de Ignicita al Reactor (`ReactorDepositContainer.cs`):**
-- **Validación Previa:** Se resuelve el `ReactorManager` objetivo, la distancia del jugador y la capacidad disponible (`MaxIgnicita - CurrentIgnicita`) **ANTES** de descontar cualquier recurso.
-- **Ejemplo Antes/Después:**
-  - *Jugador lleva 50 Ignicita; Reactor tiene capacidad restante de 30 Ignicita.*
-  - *Resultado:* Se transfieren 30 Ignicita al reactor y el jugador conserva los 20 Ignicita restantes.
-  - *Si el jugador está fuera de distancia o el reactor está lleno:* Se cancela el comando sin descontar nada (conserva 50 Ignicita).
+1. **Configuración por SerializedProperty (`BuildTestSceneAndPrefabs.cs`):**
+   - Asigna campos privados/protegidos (`cityID`, `targetCityID`) en `ReactorManager`, `CityWallHealthSync`, `SharedInventorySync`, `ReactorDepositContainer` y `CityWallRepairPanel` para Ciudad 1 (`cityID = 1`, `targetCityID = 1`) y Ciudad 2 (`cityID = 2`, `targetCityID = 2`).
+   - Asigna `syncDirection = ClientToServer` en `NetworkTransformUnreliable` para control autoritativo del cliente.
+   - Enlaza `KcpTransport` a `NetworkManager`.
 
-### **2. Reparación de Muralla (`CityWallRepairPanel.cs`):**
-- **Validación Previa:** Se resuelve la muralla y se verifica que `currentHP < maxHP` **ANTES** de cobrarse el Acero del almacén.
-- **Ejemplo Antes/Después:**
-  - *Muralla tiene 4800 / 5000 HP; Almacén posee 50 Acero (Costo: 10 Acero).*
-  - *Resultado:* Se descuentan 10 Acero y la muralla se repara a 5000 / 5000 HP.
-  - *Si la muralla ya está al 100% (5000/5000 HP) o el almacén no tiene Acero:* La reparación se rechaza y el almacén conserva íntegros sus 50 Acero.
+2. **Gestión de Delegates en Servidor (`GameManager.cs`):**
+   - Mantiene un diccionario privado de handlers explícitos (`reactorFreezeHandlers`) para desuscribir eventos específicos de `OnCityFrozenSolid` al reconstruir los registros multi-ciudad sin usar llamadas globales destructivas.
+
+3. **Estado de DefeatedCityIDs:**
+   - `defeatedCityIDs` es un `HashSet<int>` local del Servidor. Registra y anuncia la caída de calderas individuales (`RpcNotifyCityDefeated`).
+   - *Nota de Traspaso:* La restricción física de movimiento/respawn tras la derrota de ciudad será conectada en las pruebas locales al vincular los bloqueos de entrada en `PlayerController`.
 
 ---
 
-## 📝 Lista de Puntos Pendientes Documentados (Próxima Iteración Local)
+## 📝 Lista Honesta de Pendientes para Ejecución Local en Unity Editor
 
-1. **Ejecución Local de Unity 2022.3 y Weaver:** La generación de metadatos `.meta` binarios finales y la compilación del Mirror Weaver dependen de abrir el proyecto e invocar el MenuItem en Unity 2022.3 LTS local.
-2. **Pruebas de Conexión de 2 Procesos (Host / Cliente Remoto):** La verificación de interacción física a distancia y sincronización en ejecutable `.exe` / `.apk` requiere ejecutar dos instancias locales en Unity.
+1. **Compilación C# y Weaver de Mirror en Unity Editor:** Se realizaron validaciones de sintaxis y estructura mediante scripts. La compilación de bytecode IL y el tejido Weaver de Mirror se deben ejecutar al abrir Unity 2022.3 LTS localmente.
+2. **Ejecución del MenuItem Generador:** Ejecutar el ícono de menú `EcoDeLasCenizas -> Build Real Test Scene and Prefabs` en el Editor para instanciar y guardar la escena `TestScene.unity` con los GUIDs y metaarchivos `.meta` de Unity.
+3. **Ajustes Visuales del HUD:** Ajustar posiciones finales en Canvas Layout RectTransforms del Inspector para las etiquetas TextMeshPro.
+4. **Pruebas Host/Cliente de 2 Procesos:** Ejecutar dos instancias (Host y Cliente remoto) en ejecutables `.exe` o mediante el Editor ParrelSync para verificar las interacciones de distancia y depósitos atómicos.
 
 ---
 
-## 📂 Estructura del Código C# (32 Scripts en `Assets/Scripts/` y `Assets/Editor/`)
+## 📂 Estructura del Código C# (32 Scripts)
 
 | Script | Descripción y Función Principal |
 | :--- | :--- |
-| `BuildTestSceneAndPrefabs.cs` | Script Editor ejecutable que construye la escena `TestScene.unity` y los 4 prefabs de red reales. |
+| `BuildTestSceneAndPrefabs.cs` | Generador Editor ejecutable con asignaciones SerializedProperty, KcpTransport, UI Canvas y preservación de escenas. |
 | `IInteractable.cs` | Interfaz limpia para objetos interactivos en el mundo 3D. |
 | `IgnicitaHarvestNode.cs` | Nodo de recolección de Ignicita validado en servidor por distancia. |
 | `ReactorDepositContainer.cs` | Depósito atómico de combustible que valida capacidad y conserva el sobrante del jugador. |
@@ -98,4 +98,4 @@ Para generar la escena y los prefabs reales con componentes nativos de Unity/Mir
 | `CouncilVotingManager.cs` | Votos de Concejo firmados por `connectionId` validando clase en servidor contra votos duplicados. |
 | `EnemyAI.cs` | IA en NavMesh para Sombras Heladas que ataca el muro más debilitado. |
 | `NetworkLobbyManager.cs` | Creación y gestión de salas multijugador de 4 a 8 jugadores. |
-| `GameManager.cs` | Registro de sistemas multi-ciudad por `cityID`, derrota aislada por ciudad (`OnServerCityReactorFrozen`) y gestor de fases. |
+| `GameManager.cs` | Registro de sistemas multi-ciudad por `cityID`, derrota aislada por ciudad y gestor de fases. |

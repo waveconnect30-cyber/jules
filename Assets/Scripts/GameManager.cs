@@ -35,8 +35,15 @@ namespace EcoDeLasCenizas.Gameplay
         private readonly Dictionary<int, CityWallHealthSync> registeredWalls = new Dictionary<int, CityWallHealthSync>();
         private readonly Dictionary<int, SharedInventorySync> registeredWarehouses = new Dictionary<int, SharedInventorySync>();
 
+        /// <summary>
+        /// Local server-side HashSet tracking defeated city IDs.
+        /// NOTE: Currently records and announces per-city defeat events via RpcNotifyCityDefeated.
+        /// Full action blocking and respawn locking for defeated city members will be connected
+        /// during local testing when player input/respawn gates are linked.
+        /// </summary>
         [Header("Isolated City Defeat Tracking")]
         private readonly HashSet<int> defeatedCityIDs = new HashSet<int>();
+        private readonly Dictionary<int, UnityAction> reactorFreezeHandlers = new Dictionary<int, UnityAction>();
 
         [Header("Events")]
         public UnityEvent<GamePhase> OnPhaseChanged;
@@ -65,10 +72,21 @@ namespace EcoDeLasCenizas.Gameplay
         }
 
         /// <summary>
-        /// Registers multi-city system lookups in scene and hooks isolated server defeat listeners per cityID.
+        /// Registers multi-city system lookups in scene and manages explicit server event listener delegates per cityID.
         /// </summary>
         public void RebuildMultiCityRegistries()
         {
+            // Unsubscribe existing managed delegates to prevent duplicate callbacks
+            foreach (var kvp in registeredReactors)
+            {
+                int cID = kvp.Key;
+                ReactorManager r = kvp.Value;
+                if (r != null && reactorFreezeHandlers.TryGetValue(cID, out UnityAction action))
+                {
+                    r.OnCityFrozenSolid.RemoveListener(action);
+                }
+            }
+            reactorFreezeHandlers.Clear();
             registeredReactors.Clear();
             registeredWalls.Clear();
             registeredWarehouses.Clear();
@@ -79,11 +97,9 @@ namespace EcoDeLasCenizas.Gameplay
                 registeredReactors[r.CityID] = r;
 
                 int cID = r.CityID;
-                r.OnCityFrozenSolid.RemoveAllListeners();
-                r.OnCityFrozenSolid.AddListener(() =>
-                {
-                    OnServerCityReactorFrozen(cID);
-                });
+                UnityAction handler = () => OnServerCityReactorFrozen(cID);
+                reactorFreezeHandlers[cID] = handler;
+                r.OnCityFrozenSolid.AddListener(handler);
             }
 
             CityWallHealthSync[] walls = FindObjectsOfType<CityWallHealthSync>();
@@ -119,6 +135,9 @@ namespace EcoDeLasCenizas.Gameplay
             }
         }
 
+        /// <summary>
+        /// Returns whether the specified cityID has suffered a total freeze defeat.
+        /// </summary>
         public bool IsCityDefeated(int cityID)
         {
             return defeatedCityIDs.Contains(cityID);
