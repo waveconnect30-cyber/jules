@@ -39,6 +39,13 @@ namespace EcoDeLasCenizas.Gameplay
         {
             if (raidingPlayer == null || targetWarehouse == null) return;
 
+            // Enforce Season Phase Raid Immunity (Phase 1 Settlement blocks raiding)
+            if (SeasonManager.Instance != null && !SeasonManager.Instance.IsRaidAllowed())
+            {
+                Debug.LogWarning("[CityLootManager] RAID BLOCKED: Raid immunity is active during Season Phase 1 (Settlement).");
+                return;
+            }
+
             int attackerCityID = raidingPlayer.cityID;
             int targetCityID = targetWarehouse.cityID;
 

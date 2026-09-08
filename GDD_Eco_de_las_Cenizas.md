@@ -1,5 +1,5 @@
 # GAME DESIGN DOCUMENT (GDD)
-# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas y Ruinas Mundiales
+# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas y Temporadas de 14 Días
 
 **Género:** Multijugador PvPvE Cooperativo 3D / Guerra de Clanes / Supervivencia en Megaciudad
 **Plataforma Objetivo:** PC / Consolas de última generación (Unreal Engine 5 / Unity)
@@ -8,64 +8,42 @@
 
 ---
 
-## 1. Premisa y Visión General (Modelo PvPvE Multiciudad)
+## 1. Calendario de Temporada de 14 Días (`SeasonManager`)
 
-En un mundo consumido por un invierno cataclísmico y la **'Niebla Helada'**, múltiples megaciudades industriales rivales (*La Caldera Alpha*, *La Caldera Beta*, etc.) compiten ferozmente por el control de la **Ciudad Presidencial** en el centro del mapa (0,0,0) y las **Ruinas Industriales y Militares** esparcidas por el territorio.
-
----
-
-## 2. Mapa Mundial, Ruinas Centrales y Atributos de Jugador
-
-### **2.1. Ciudad Presidencial Capital (0,0,0)**
-- **Ubicación:** Centro absoluto del mapa de juego.
-- **Mecánica de Asedio (`WorldMapManager`):** Requiere sostener un asedio de 5 minutos en el perímetro central. El clan victorioso toma la capital y duplica todas las bonificaciones pasivas de sus ruinas.
-
-### **2.2. Sistema de Ruinas (`RuinsNode`)**
-El mapa contiene **4 Ruinas Principales** y **8 Ruinas Secundarias** de apoyo:
-- **Ruina Militar Principal:** Otorgar +25% Poder de Ataque (`attackPower`).
-- **Ruina Industrial Principal:** Otorgar +30% Velocidad de Recolección (`harvestSpeed`).
-- **Ruina de Salud Principal:** Otorgar +30% Vida Máxima (`maxHP`).
-- **Ruina de Energía Principal:** Otorgar +40% Eficiencia de Combustible al Reactor Central.
-- **8 Ruinas Secundarias:** Fortalezas Alpha/Beta, Talleres Este/Oeste, BioLabs Norte/Sur y Subestaciones Eléctricas.
-
-### **2.3. Esclusas de Ciudad (`CityAirlock`) y Atributos (`PlayerStatsManager`)**
-- **Esclusa de Salida:** Los jugadores cruzan la esclusa sellada de su ciudad para adentrarse en la niebla. Al salir de la cúpula térmica, se inicia el contador de exposición al frío tóxico.
-- **Gestión Dinámica de Stats:** El script `PlayerStatsManager` calcula en tiempo real `attackPower`, `maxHP`, `harvestSpeed` y `thermalResistance` según las Ruinas activas controladas por la `cityID` del jugador.
-
----
-
-## 3. Core Loop PvPvE (Bucle Principal de Juego)
+El juego se organiza en **Temporadas Servidor de 14 días** con reglas progresivas:
 
 ```
-       +-------------------------------------------------------+
-       |   FASE 1: Salida por Esclusa y Captura de Ruinas      |
-       |   - Transición por `CityAirlock` hacia la Niebla     |
-       |   - Captura de Ruinas Principales y Secundarias      |
-       +---------------------------+---------------------------+
-                                   |
-                                   v
-       +-------------------------------------------------------+
-       |   FASE 2: Asedio a la Ciudad Presidencial (0,0,0)     |
-       |   - Batallas masivas por el control del centro (0,0,0) |
-       |   - Saqueo de Almacenes Enemigos (`CityLootManager`)   |
-       +---------------------------+---------------------------+
-                                   |
-                                   v
-       +-------------------------------------------------------+
-       |   FASE 3: Defensa, Diplomacia y Tormentas Heladas     |
-       |   - Repeler Sombras Heladas y Súper Tormentas Heladas  |
-       |   - Chat Multicanal y Alianzas por `DiplomacyManager` |
-       +-------------------------------------------------------+
+ Días 1 - 3              Días 4 - 8             Días 9 - 12             Días 13 - 14
++-----------------------+----------------------+-----------------------+-----------------------+
+| FASE 1: SETTLEMENT    | FASE 2: EXPANSION    | FASE 3: PRESIDENTIAL  | FASE 4: OVERLOAD WIPE |
+| - Inmunidad de Saqueo | - Saqueo de Almacén  |   SIEGE (0,0,0)       | - Súper Tormenta      |
+| - Fortificación       | - Captura de Ruinas  | - Hold 3h = Gobernador| - Entrega Cosméticos  |
+|   de la Ciudad        |   y Nodos            | - Impuesto 5% Global  | - Reinicio Servidor   |
++-----------------------+----------------------+-----------------------+-----------------------+
 ```
+
+### **1.1. Inmunidad de Fase 1 (Settlement)**
+Durante los primeros 3 días de servidor, la función `ExecuteCityRaid` permanece desactivada. Las ciudades no pueden saquearse mutuamente, permitiendo a los clanes construir su infraestructura básica.
+
+### **1.2. Ciudad Presidencial y Título de Gobernador (Fase 3)**
+En los días 9 a 12, se desbloquea la captura de la **Ciudad Presidencial (0,0,0)**.
+- **Victoria del Gobernador:** Si un clan sostiene el control ininterrumpido durante **3 horas consecutivas**, se le proclama clan **Gobernador**.
+- **Impuesto del 5%:** El clan Gobernador recibe de forma automática un **5% de impuesto pasivo** sobre toda la Ignicita procesada en el mundo.
+
+### **1.3. Cierre y Overload Wipe (Fase 4)**
+En los días 13 y 14, se activa el evento global de **Súper Tormenta Helada**. Tras finalizar, los jugadores reciben trofeos cosméticos permanentes y el servidor se reinicia para una nueva temporada.
 
 ---
 
-## 4. Guion y Narrativa Ambiental (Tutorial de Ruinas y Mapa Mundial)
+## 2. Mapa Mundial, Ruinas y Atributos
 
-**Personaje:** *Maelo*, el anciano operador de La Caldera Nivel 1.
+- **Ciudad Presidencial Capital (0,0,0):** Centro de la región y objetivo de la Fase 3.
+- **Ruinas (4 Principales + 8 Secundarias):** Otorgan multiplicadores globales de Ataque (+25%), Cosecha (+30%), Vida (+30%) y Eficiencia Térmica (+40%).
+- **Esclusa de Ciudad (`CityAirlock`):** Puerta de enlace hacia la niebla exterior con temporizador de exposición.
 
-> *(Maelo señala el gran mapa táctico de metal en la pared del reactor)*
->
-> "Atento, novato. Allá afuera en el centro del mapa está la vieja **Ciudad Presidencial**. Quien controle esa aguja de acero dominará toda la región. Pero no podrás llegar hasta ella sin antes tomar las **Ruinas Industriales y Militares** que la rodean.
->
-> Toma la **Esclusa de Salida**. Cada Ruina que nuestro clan capture aumentará la fuerza de tus armas, tu salud y la velocidad con la que extraes Ignicita. Pero ten cuidado: la niebla envenena si te alejas demasiado de los domos térmicos. ¡Cruza la puerta y reclama esas ruinas para La Caldera!"
+---
+
+## 3. Core Loop PvPvE de Temporada
+
+1. **Semana 1:** Extracción de mineral, fortificación de la caldera e incursiones PvPvE por ruinas secundarias.
+2. **Semana 2:** Asedio masivo a la Ciudad Presidencial en (0,0,0), coronación del Gobernador con impuesto del 5% y sobrevivencia al Overload Wipe final.

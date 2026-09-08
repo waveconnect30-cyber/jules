@@ -1,6 +1,6 @@
-# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas y Ruinas Mundiales
+# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas y Temporadas de 14 Días
 
-¡Bienvenido al repositorio de **Eco de las Cenizas**, un videojuego multijugador PvPvE cooperativo y competitivo 3D en un mundo helado de megaciudades rivales, ruinas mundiales y la gran Ciudad Presidencial en (0,0,0).
+¡Bienvenido al repositorio de **Eco de las Cenizas**, un videojuego multijugador PvPvE cooperativo y competitivo 3D en un mundo helado de megaciudades rivales, ruinas mundiales, el título de Gobernador y temporadas de 14 días.
 
 ---
 
@@ -11,30 +11,31 @@
 
 ---
 
-## 🚀 Mapa Mundial, Ruinas y Atributos de Jugador
+## 🗓️ Calendario de Temporada de 14 Días (`SeasonManager.cs`)
 
-1. **Ciudad Presidencial Capital (0,0,0) (`WorldMapManager.cs`):**
-   - La capital mundial en el centro del mapa. Controlable mediante un asedio de 5 minutos, duplicando todas las bonificaciones de clan.
-
-2. **4 Ruinas Principales y 8 Ruinas Secundarias (`RuinsNode.cs`):**
-   - **Militar Principal:** Otorga +25% de Poder de Ataque (`attackPower`).
-   - **Industrial Principal:** Otorga +30% de Velocidad de Recolección (`harvestSpeed`).
-   - **Salud Principal:** Otorga +30% de Vida Máxima (`maxHP`).
-   - **Energía Principal:** Otorga +40% de Eficiencia Térmica al Reactor.
-   - **8 Ruinas Secundarias:** Fortalezas Alpha/Beta, Talleres Este/Oeste, BioLabs Norte/Sur y Subestaciones.
-
-3. **Exclusión y Esclusas de Ciudad (`CityAirlock.cs`):**
-   - Transición de la zona segura de la cúpula hacia la Niebla Helada exterior con temporizadores de exposición tóxica.
-
-4. **Sistema Dinámico de Atributos (`PlayerStatsManager.cs`):**
-   - Calcula estadísticas efectivas en tiempo real segun el número de Ruinas capturadas por el `cityID` del jugador.
+| Fase de Temporada | Días | Mecánicas y Reglas de Juego |
+| :--- | :--- | :--- |
+| **Fase 1: Settlement** | Días 1–3 | Inmunidad de Saqueo activa. Construcción y fortificación segura de la ciudad. |
+| **Fase 2: Expansion** | Días 4–8 | Inmunidad desactivada. Incursiones de saqueo (`CityLootManager`) y captura de Ruinas. |
+| **Fase 3: PresidentialSiege**| Días 9–12 | Captura del nodo Presidencial (0,0,0). Mantener control por 3 hrs corona al **Gobernador**. |
+| **Fase 4: OverloadWipe** | Días 13–14 | Súper Tormenta Helada global, entrega de cosméticos trofeo y reinicio de servidor. |
 
 ---
 
-## 📂 Estructura del Código C# (22 Scripts)
+## 🚀 Mecánicas Clave del Sistema de Temporadas y Gobernador
+
+1. **Impuesto del Gobernador (5% Global):**
+   - El clan que ostente el título de Gobernador recibe automáticamente un **5% de impuesto pasivo** sobre toda la Ignicita procesada en el servidor.
+2. **Condición de Victoria de la Capital (0,0,0):**
+   - El clan que mantenga el control ininterrumpido de la Ciudad Presidencial durante **3 horas consecutivas** obtiene el título de Gobernador de La Caldera.
+
+---
+
+## 📂 Estructura del Código C# (23 Scripts)
 
 | Script | Descripción y Función Principal |
 | :--- | :--- |
+| `SeasonManager.cs` | Reloj de temporada de 14 días (4 fases), inmunidad de saqueo en Fase 1, impuesto del 5% y reinicio. |
 | `PlayerController.cs` | Controlador 3D con `cityID`, salto, interacciones `IInteractable` y debuff de velocidad. |
 | `PlayerStatsManager.cs` | Gestión de atributos (`attackPower`, `maxHP`, `harvestSpeed`, `thermalResistance`) y bonificaciones por Ruinas. |
 | `RuinsNode.cs` | Ruinas capturables (4 Principales + 8 Secundarias) con buffs globales para la ciudad controladora. |

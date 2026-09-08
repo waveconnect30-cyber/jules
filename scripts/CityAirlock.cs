@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
 using EcoDeLasCenizas.Player;
@@ -6,7 +7,7 @@ namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
     /// Handles player transition through the city airlock into the hazardous World Map.
-    /// Tracks fog exposure time when players step outside protected city/ruin thermal domes.
+    /// Tracks per-player fog exposure time when players step outside protected city/ruin thermal domes.
     /// </summary>
     public class CityAirlock : NetworkBehaviour
     {
@@ -15,18 +16,18 @@ namespace EcoDeLasCenizas.Gameplay
         [SerializeField] private float maxSafeFogExposureSeconds = 45.0f;
         [SerializeField] private float exposureDamagePerSecond = 5.0f;
 
-        [Header("Player Tracking")]
-        private float currentExposureTimer = 0f;
-        private bool isPlayerInSafeDome = true;
+        // Per-player fog exposure tracking
+        private readonly Dictionary<PlayerController, float> playerExposureTimers = new Dictionary<PlayerController, float>();
+        private readonly HashSet<PlayerController> playersInDome = new HashSet<PlayerController>();
 
         private void OnTriggerEnter(Collider other)
         {
             PlayerController player = other.GetComponent<PlayerController>();
             if (player != null)
             {
-                isPlayerInSafeDome = true;
-                currentExposureTimer = 0f;
-                Debug.Log($"[CityAirlock City:{cityID}] Player entered safe dome area.");
+                playersInDome.Add(player);
+                playerExposureTimers[player] = 0f;
+                Debug.Log($"[CityAirlock City:{cityID}] Player {player.name} (CityID:{player.cityID}) entered safe dome area.");
             }
         }
 
@@ -35,24 +36,46 @@ namespace EcoDeLasCenizas.Gameplay
             PlayerController player = other.GetComponent<PlayerController>();
             if (player != null)
             {
-                isPlayerInSafeDome = false;
-                Debug.LogWarning($"[CityAirlock City:{cityID}] Player EXITED safe dome into the Frozen Fog! Fog exposure timer started.");
+                playersInDome.Remove(player);
+                if (!playerExposureTimers.ContainsKey(player))
+                {
+                    playerExposureTimers[player] = 0f;
+                }
+                Debug.LogWarning($"[CityAirlock City:{cityID}] Player {player.name} EXITED safe dome into Frozen Fog! Exposure timer started.");
             }
         }
 
         private void Update()
         {
-            if (!isPlayerInSafeDome)
-            {
-                currentExposureTimer += Time.deltaTime;
+            List<PlayerController> trackedPlayers = new List<PlayerController>(playerExposureTimers.Keys);
 
-                if (currentExposureTimer >= maxSafeFogExposureSeconds)
+            foreach (var player in trackedPlayers)
+            {
+                if (player == null)
                 {
-                    Debug.LogWarning($"[CityAirlock] FOG EXPOSURE DAMAGE DEALT ({exposureDamagePerSecond} DMG/s)! Return to a thermal dome!");
+                    playerExposureTimers.Remove(player);
+                    continue;
+                }
+
+                if (!playersInDome.Contains(player))
+                {
+                    playerExposureTimers[player] += Time.deltaTime;
+
+                    if (playerExposureTimers[player] >= maxSafeFogExposureSeconds)
+                    {
+                        Debug.LogWarning($"[CityAirlock] FOG DAMAGE DEALT ({exposureDamagePerSecond * Time.deltaTime:F1} HP) to {player.name}! Return to a thermal dome!");
+                    }
                 }
             }
         }
 
-        public float ExposurePercentage => Mathf.Clamp01(currentExposureTimer / maxSafeFogExposureSeconds) * 100f;
+        public float GetPlayerExposurePercentage(PlayerController player)
+        {
+            if (player != null && playerExposureTimers.TryGetValue(player, out float timer))
+            {
+                return Mathf.Clamp01(timer / maxSafeFogExposureSeconds) * 100f;
+            }
+            return 0f;
+        }
     }
 }

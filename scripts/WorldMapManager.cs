@@ -6,6 +6,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Manages the World Map layout, defining the central Presidential City at (0,0,0)
     /// and siege capture events for controlling the central megacity capital.
+    /// Unlocked exclusively during Season Phase 3 (Presidential Siege).
     /// </summary>
     public class WorldMapManager : NetworkBehaviour
     {
@@ -32,10 +33,18 @@ namespace EcoDeLasCenizas.Gameplay
 
         /// <summary>
         /// Registers siege progress on the central Presidential City at (0,0,0).
+        /// Only allowed during Season Phase 3 (Presidential Siege).
         /// </summary>
         [Server]
         public void ProcessCapitalSiege(int attackingCityID, float deltaTime)
         {
+            // Verify Season Phase 3 (PresidentialSiege)
+            if (SeasonManager.Instance != null && SeasonManager.Instance.currentSeasonPhase != SeasonPhase.PresidentialSiege)
+            {
+                Debug.LogWarning("[WorldMapManager] CAPITAL SIEGE BLOCKED: Presidential City capture is only unlocked during Season Phase 3 (Presidential Siege).");
+                return;
+            }
+
             if (attackingCityID == capitalControllingCityID) return;
 
             if (siegeAttackingCityID != attackingCityID)

@@ -1,12 +1,14 @@
 using System;
 using UnityEngine;
 using UnityEngine.Events;
+using EcoDeLasCenizas.Gameplay;
 
 namespace EcoDeLasCenizas.Core
 {
     /// <summary>
     /// Manages the Central Geothermal Reactor, Ignicita fuel consumption, city temperature decay,
     /// cityID ownership in PvPvE mode, and global penalties for freezing conditions (-10°C threshold).
+    /// Redirects 5% Governor Tax to the reigning Governor clan warehouse during fuel processing.
     /// </summary>
     public class ReactorManager : MonoBehaviour
     {
@@ -65,7 +67,6 @@ namespace EcoDeLasCenizas.Core
         {
             if (Instance != null && Instance != this)
             {
-                // In multi-city mode, multiple reactor instances exist per cityID
                 return;
             }
             Instance = this;
@@ -87,11 +88,19 @@ namespace EcoDeLasCenizas.Core
         {
             if (currentIgnicita > 0f)
             {
-                currentIgnicita -= ignicitaConsumptionRate * deltaTime;
+                float consumedThisFrame = ignicitaConsumptionRate * deltaTime;
+                currentIgnicita -= consumedThisFrame;
                 if (currentIgnicita < 0f)
                 {
                     currentIgnicita = 0f;
                 }
+
+                // Redirect 5% Governor Tax to Governor warehouse
+                if (SeasonManager.Instance != null)
+                {
+                    SeasonManager.Instance.ApplyGovernorTax(consumedThisFrame);
+                }
+
                 OnIgnicitaChanged?.Invoke(currentIgnicita);
             }
             else
