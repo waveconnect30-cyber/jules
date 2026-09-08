@@ -14,7 +14,7 @@ namespace EcoDeLasCenizas.UI
         [SerializeField] private TextMeshProUGUI temperatureText;
         [SerializeField] private Slider temperatureSlider;
         [SerializeField] private Image temperatureFillImage;
-        [SerializeField] private Color normalTempColor = Color.orange;
+        [SerializeField] private Color normalTempColor = new Color(1f, 0.5f, 0f); // Compatible with Unity 2022.3
         [SerializeField] private Color freezingTempColor = Color.cyan;
 
         [Header("Ignicita Fuel Display")]
@@ -32,10 +32,12 @@ namespace EcoDeLasCenizas.UI
 
         private void Start()
         {
-            if (EcoDeLasCenizas.Core.ReactorManager.Instance != null)
-            {
-                var reactor = EcoDeLasCenizas.Core.ReactorManager.Instance;
+            var reactor = EcoDeLasCenizas.Gameplay.GameManager.Instance != null
+                ? EcoDeLasCenizas.Gameplay.GameManager.Instance.GetReactorForCity(1)
+                : FindObjectOfType<EcoDeLasCenizas.Core.ReactorManager>();
 
+            if (reactor != null)
+            {
                 reactor.OnTemperatureChanged.AddListener(UpdateTemperatureUI);
                 reactor.OnIgnicitaChanged.AddListener(UpdateIgnicitaUI);
                 reactor.OnGreenhouseStatusChanged.AddListener(UpdateGreenhouseUI);
@@ -74,9 +76,7 @@ namespace EcoDeLasCenizas.UI
 
         public void UpdateIgnicitaUI(float currentIgnicita)
         {
-            float maxFuel = EcoDeLasCenizas.Core.ReactorManager.Instance != null
-                ? EcoDeLasCenizas.Core.ReactorManager.Instance.MaxIgnicita
-                : 1000f;
+            float maxFuel = 1000f;
 
             if (ignicitaText != null)
             {

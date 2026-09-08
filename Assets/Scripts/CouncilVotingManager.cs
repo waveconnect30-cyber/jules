@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using Mirror;
+using EcoDeLasCenizas.Core;
+using EcoDeLasCenizas.Player;
 
 namespace EcoDeLasCenizas.Gameplay
 {
@@ -34,7 +36,7 @@ namespace EcoDeLasCenizas.Gameplay
 
     /// <summary>
     /// Manages democratic Council voting sessions over Mirror networking.
-    /// Uses [Command] signed player netId votes and SyncVars/RPCs to synchronize global vote counts.
+    /// Server reads player class directly from server-side PlayerController SyncVar to prevent spoofing.
     /// Rejects duplicate votes from the same netId.
     /// </summary>
     public class CouncilVotingManager : NetworkBehaviour
@@ -97,9 +99,10 @@ namespace EcoDeLasCenizas.Gameplay
 
         /// <summary>
         /// Casts a vote signed with the sender's network connection identity.
+        /// Reads true character class from server-side PlayerController SyncVar.
         /// </summary>
         [Command(requiresAuthority = false)]
-        public void CmdCastVote(CharacterClass playerClass, PolicyOption chosenOption, NetworkConnectionToClient senderConn = null)
+        public void CmdCastVote(PolicyOption chosenOption, NetworkConnectionToClient senderConn = null)
         {
             if (currentSession == null || !currentSession.isSessionActive)
             {
@@ -108,7 +111,9 @@ namespace EcoDeLasCenizas.Gameplay
             }
 
             NetworkConnectionToClient conn = senderConn ?? connectionToClient;
-            string senderNetId = conn != null ? conn.connectionId.ToString() : "UnknownPlayer";
+            if (conn == null || conn.identity == null) return;
+
+            string senderNetId = conn.connectionId.ToString();
 
             if (currentSession.votedPlayerIDs.Contains(senderNetId))
             {
@@ -116,12 +121,26 @@ namespace EcoDeLasCenizas.Gameplay
                 return;
             }
 
+            // Read true class from server-side PlayerController component
+            CharacterClass serverPlayerClass = CharacterClass.Explorer;
+            PlayerController pController = conn.identity.GetComponent<PlayerController>();
+            if (pController != null)
+            {
+                serverPlayerClass = pController.Class;
+            }
+
+            if (!currentSession.voteTally.ContainsKey(chosenOption))
+            {
+                Debug.LogWarning($"[CouncilVotingManager SERVER] INVALID VOTE OPTION REJECTED: {chosenOption}");
+                return;
+            }
+
             currentSession.votedPlayerIDs.Add(senderNetId);
 
-            float voteWeight = GetVoteWeightForClass(playerClass, chosenOption);
+            float voteWeight = GetVoteWeightForClass(serverPlayerClass, chosenOption);
             currentSession.voteTally[chosenOption] += voteWeight;
 
-            Debug.Log($"[CouncilVotingManager SERVER] Vote cast by NetId {senderNetId} ({playerClass}) for {chosenOption} (Weight: {voteWeight}). New Total: {currentSession.voteTally[chosenOption]}");
+            Debug.Log($"[CouncilVotingManager SERVER] Vote cast by NetId {senderNetId} (Class:{serverPlayerClass}) for {chosenOption} (Weight: {voteWeight}). New Total: {currentSession.voteTally[chosenOption]}");
 
             RpcNotifyVoteCast(chosenOption, currentSession.voteTally[chosenOption]);
         }
@@ -190,9 +209,10 @@ namespace EcoDeLasCenizas.Gameplay
 
                 case PolicyOption.OptionC_OverchargeReactor:
                     Debug.Log("[Council Policy SERVER] Reactor Overcharged! +15°C Temperature surge.");
-                    if (EcoDeLasCenizas.Core.ReactorManager.Instance != null)
+                    ReactorManager reactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(1) : FindObjectOfType<ReactorManager>();
+                    if (reactor != null)
                     {
-                        EcoDeLasCenizas.Core.ReactorManager.Instance.DepositIgnicita(50f);
+                        reactor.DepositIgnicita(50f, 1);
                     }
                     break;
             }

@@ -61,10 +61,11 @@ namespace EcoDeLasCenizas.Player
         {
             ApplyClassStats();
 
-            if (ReactorManager.Instance != null && ReactorManager.Instance.CityID == cityID)
+            ReactorManager reactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(cityID) : FindObjectOfType<ReactorManager>();
+            if (reactor != null && reactor.CityID == cityID)
             {
-                ReactorManager.Instance.OnPlayerMovementPenaltyChanged.AddListener(OnFreezingPenaltyUpdated);
-                OnFreezingPenaltyUpdated(ReactorManager.Instance.IsMovementSlowed);
+                reactor.OnPlayerMovementPenaltyChanged.AddListener(OnFreezingPenaltyUpdated);
+                OnFreezingPenaltyUpdated(reactor.IsMovementSlowed);
             }
         }
 
@@ -95,7 +96,6 @@ namespace EcoDeLasCenizas.Player
         {
             if (isDead) return;
 
-            // NETWORK AUTHORITY CHECK: Only local controlling player processes input and locomotion
             if (isServer || isLocalPlayer)
             {
                 HandleGroundCheck();
@@ -215,7 +215,6 @@ namespace EcoDeLasCenizas.Player
             currentHP = maxHP;
             isDead = false;
 
-            // Teleport to spawn point (or origin)
             transform.position = new Vector3(cityID * 10f, 0f, 0f);
             Debug.Log($"[PlayerController SERVER] PLAYER RESPAWNED: {name} (CityID:{cityID}) at {transform.position}");
             RpcOnPlayerRespawn(transform.position);

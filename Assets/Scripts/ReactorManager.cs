@@ -10,13 +10,10 @@ namespace EcoDeLasCenizas.Core
     /// <summary>
     /// Manages the Central Geothermal Reactor, Ignicita fuel consumption, city temperature decay,
     /// cityID ownership in PvPvE mode, and global penalties for freezing conditions (-10°C threshold).
-    /// All temperature decay cycles and fuel updates execute strictly on [Server] and sync via SyncVars.
-    /// Remote clients run SyncVar hooks that automatically trigger ScreenFrostPostProcessUI and speed penalty events.
+    /// Instances are registered by cityID in GameManager rather than using a global static singleton.
     /// </summary>
     public class ReactorManager : NetworkBehaviour
     {
-        public static ReactorManager Instance { get; private set; }
-
         [Header("City Faction Ownership")]
         [Tooltip("The City / Clan ID that owns this reactor.")]
         [SyncVar] [SerializeField] private int cityID = 1;
@@ -66,15 +63,6 @@ namespace EcoDeLasCenizas.Core
         public bool IsGreenhouseActive => isGreenhouseActive;
         public bool IsMovementSlowed => isMovementSlowed;
 
-        private void Awake()
-        {
-            if (Instance != null && Instance != this)
-            {
-                return;
-            }
-            Instance = this;
-        }
-
         private void Start()
         {
             OnIgnicitaChanged?.Invoke(currentIgnicita);
@@ -102,7 +90,6 @@ namespace EcoDeLasCenizas.Core
                     currentIgnicita = 0f;
                 }
 
-                // Redirect 5% Governor Tax to Governor warehouse
                 if (SeasonManager.Instance != null)
                 {
                     SeasonManager.Instance.ApplyGovernorTax(consumedThisFrame);
@@ -147,11 +134,10 @@ namespace EcoDeLasCenizas.Core
                     Debug.LogWarning($"[ReactorManager City:{cityID}] CRITICAL WARNING: Freezing weather reduces player movement speed by 20%.");
                     OnPlayerMovementPenaltyChanged?.Invoke(true);
 
-                    // Trigger screen frost UI overlay on client
                     ScreenFrostPostProcessUI frostUI = FindObjectOfType<ScreenFrostPostProcessUI>();
                     if (frostUI != null)
                     {
-                        frostUI.SetFreezingAlertState(true);
+                        frostUI.EvaluateCityTemperature(cityID, currentTemperature);
                     }
                 }
             }
@@ -173,7 +159,7 @@ namespace EcoDeLasCenizas.Core
                     ScreenFrostPostProcessUI frostUI = FindObjectOfType<ScreenFrostPostProcessUI>();
                     if (frostUI != null)
                     {
-                        frostUI.SetFreezingAlertState(false);
+                        frostUI.EvaluateCityTemperature(cityID, currentTemperature);
                     }
                 }
             }
@@ -184,9 +170,6 @@ namespace EcoDeLasCenizas.Core
             }
         }
 
-        /// <summary>
-        /// Deposit Ignicita fuel into reactor. Accepts deposits only from matching cityID survivors.
-        /// </summary>
         [Server]
         public void DepositIgnicita(float amount, int depositorCityID)
         {

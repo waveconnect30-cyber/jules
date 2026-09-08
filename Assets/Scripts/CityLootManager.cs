@@ -8,14 +8,16 @@ namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
     /// Handles city raiding and looting logic in PvPvE mode.
+    /// Implements IInteractable to trigger raids via player interaction [F].
     /// Requires target city wall HP == 0 OR critical reactor freezing before allowing raids.
     /// Checks DiplomacyManager to prohibit raids between allied cities.
     /// </summary>
-    public class CityLootManager : NetworkBehaviour
+    public class CityLootManager : NetworkBehaviour, IInteractable
     {
         public static CityLootManager Instance { get; private set; }
 
         [Header("Looting Parameters")]
+        [SerializeField] private int targetCityID = 2;
         [SerializeField] private float baseRaidPercentage = 0.25f; // Steals 25% of stored Ignicita
         [SerializeField] private float raidCooldownSeconds = 60.0f;
 
@@ -29,6 +31,24 @@ namespace EcoDeLasCenizas.Gameplay
                 return;
             }
             Instance = this;
+        }
+
+        public string GetInteractionPrompt()
+        {
+            return $"Presiona [F] para asaltar y saquear el almacén de Ciudad {targetCityID}";
+        }
+
+        public void Interact(PlayerController player)
+        {
+            if (player == null) return;
+
+            SharedInventorySync targetWarehouse = GameManager.Instance != null ? GameManager.Instance.GetWarehouseForCity(targetCityID) : null;
+            ReactorManager targetReactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(targetCityID) : null;
+
+            if (targetWarehouse != null)
+            {
+                ExecuteCityRaid(player, targetWarehouse, targetReactor);
+            }
         }
 
         /// <summary>
@@ -71,7 +91,7 @@ namespace EcoDeLasCenizas.Gameplay
 
             // Vulnerability Check: Target city must have at least 1 wall breached OR reactor frozen
             bool isWallBreached = false;
-            CityWallHealthSync targetWall = FindCityWall(targetCityID);
+            CityWallHealthSync targetWall = GameManager.Instance != null ? GameManager.Instance.GetWallForCity(targetCityID) : null;
             if (targetWall != null)
             {
                 for (int i = 0; i < 4; i++)
@@ -99,28 +119,14 @@ namespace EcoDeLasCenizas.Gameplay
             {
                 lastRaidTimestamp = Time.time;
 
-                SharedInventorySync[] warehouses = FindObjectsOfType<SharedInventorySync>();
-                foreach (var wh in warehouses)
+                SharedInventorySync attackerWarehouse = GameManager.Instance != null ? GameManager.Instance.GetWarehouseForCity(attackerCityID) : null;
+                if (attackerWarehouse != null)
                 {
-                    if (wh.cityID == attackerCityID)
-                    {
-                        wh.AddIgnicitaToWarehouse(stolenIgnicita, targetCityID);
-                        break;
-                    }
+                    attackerWarehouse.AddIgnicitaToWarehouse(stolenIgnicita, targetCityID);
                 }
 
                 RpcAnnounceRaidResult(attackerCityID, targetCityID, stolenIgnicita);
             }
-        }
-
-        private CityWallHealthSync FindCityWall(int cID)
-        {
-            CityWallHealthSync[] walls = FindObjectsOfType<CityWallHealthSync>();
-            foreach (var w in walls)
-            {
-                if (w.cityID == cID) return w;
-            }
-            return null;
         }
 
         [ClientRpc]

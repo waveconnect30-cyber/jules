@@ -7,11 +7,10 @@ namespace EcoDeLasCenizas.Networking
     /// <summary>
     /// Synchronizes shared community warehouse inventory (Ignicita crystals, Steel, Ration filters)
     /// for a specific cityID across all networked clients in PvPvE mode.
+    /// Instances are registered by cityID in GameManager rather than using a global static singleton.
     /// </summary>
     public class SharedInventorySync : NetworkBehaviour
     {
-        public static SharedInventorySync Instance { get; private set; }
-
         [Header("City Faction Ownership")]
         [SyncVar] public int cityID = 1;
 
@@ -31,15 +30,6 @@ namespace EcoDeLasCenizas.Networking
         public float TotalStoredIgnicita => totalStoredIgnicita;
         public int TotalStoredSteel => totalStoredSteel;
         public int TotalStoredRations => totalStoredRations;
-
-        private void Awake()
-        {
-            if (Instance != null && Instance != this)
-            {
-                return;
-            }
-            Instance = this;
-        }
 
         [Server]
         public void AddIgnicitaToWarehouse(float amount, int sourceCityID = 1)
@@ -67,9 +57,19 @@ namespace EcoDeLasCenizas.Networking
             return false;
         }
 
-        /// <summary>
-        /// Raiding method: allows hostile city players to raid Ignicita when city defenses fall.
-        /// </summary>
+        [Server]
+        public bool ConsumeSteelFromWarehouse(int amount, int requestingCityID = 1)
+        {
+            if (requestingCityID != cityID) return false;
+
+            if (totalStoredSteel >= amount)
+            {
+                totalStoredSteel -= amount;
+                return true;
+            }
+            return false;
+        }
+
         [Server]
         public float RaidIgnicita(float raidPercentage)
         {

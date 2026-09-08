@@ -1,11 +1,14 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Mirror;
+using EcoDeLasCenizas.Player;
 
 namespace EcoDeLasCenizas.UI
 {
     /// <summary>
     /// Controls screen vignette/frost border overlays and animated text alerts when city temperature drops below -10°C.
+    /// Isolated to client: vignetting activates ONLY if the freezing city matches local player's cityID.
     /// </summary>
     public class ScreenFrostPostProcessUI : MonoBehaviour
     {
@@ -33,24 +36,37 @@ namespace EcoDeLasCenizas.UI
             {
                 warningAlertBanner.SetActive(false);
             }
-
-            if (EcoDeLasCenizas.Core.ReactorManager.Instance != null)
-            {
-                EcoDeLasCenizas.Core.ReactorManager.Instance.OnPlayerMovementPenaltyChanged.AddListener(SetFreezingAlertState);
-                SetFreezingAlertState(EcoDeLasCenizas.Core.ReactorManager.Instance.IsMovementSlowed);
-            }
         }
 
         private void Update()
         {
             if (isFreezingActive && frostBorderOverlayImage != null)
             {
-                // Pulsing frost vignette effect
                 float alpha = (Mathf.Sin(Time.time * pulseSpeed) * 0.15f) + (maxFrostAlpha - 0.15f);
                 Color c = frostBorderOverlayImage.color;
                 c.a = Mathf.Clamp01(alpha);
                 frostBorderOverlayImage.color = c;
             }
+        }
+
+        /// <summary>
+        /// Evaluates temperature drop against local player's cityID.
+        /// Ignores freezing alerts from foreign enemy cities.
+        /// </summary>
+        public void EvaluateCityTemperature(int reactorCityID, float temperature)
+        {
+            var localPlayer = NetworkClient.localPlayer != null
+                ? NetworkClient.localPlayer.GetComponent<PlayerController>()
+                : FindObjectOfType<PlayerController>();
+
+            if (localPlayer != null && localPlayer.cityID != reactorCityID)
+            {
+                // Ignore temperature changes from enemy city reactors
+                return;
+            }
+
+            bool shouldAlert = temperature <= -10.0f;
+            SetFreezingAlertState(shouldAlert);
         }
 
         public void SetFreezingAlertState(bool active)
@@ -64,7 +80,7 @@ namespace EcoDeLasCenizas.UI
 
             if (warningAlertText != null && active)
             {
-                warningAlertText.text = "¡TEMPERATURA CRÍTICA: -10°C! ESCUADRÓN AFECTADO POR CONGELAMIENTO (-20% VELOCIDAD)";
+                warningAlertText.text = "¡TEMPERATURA CRÍTICA DE TU CIUDAD: -10°C! ESCUADRÓN AFECTADO POR CONGELAMIENTO (-20% VELOCIDAD)";
             }
 
             if (!active && frostBorderOverlayImage != null)

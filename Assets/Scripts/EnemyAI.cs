@@ -1,17 +1,21 @@
 using UnityEngine;
 using UnityEngine.AI;
 using EcoDeLasCenizas.Networking;
+using EcoDeLasCenizas.Gameplay;
 
 namespace EcoDeLasCenizas.AI
 {
     /// <summary>
     /// AI controller for 'Sombras Heladas' (Frozen Shadow creatures).
     /// Uses NavMeshAgent to dynamically locate and advance toward the City Wall section
-    /// with the lowest remaining HP during siege phases. Attacks walls upon reaching melee distance.
+    /// with the lowest remaining HP for its target cityID during siege phases.
     /// </summary>
     [RequireComponent(typeof(NavMeshAgent))]
     public class EnemyAI : MonoBehaviour
     {
+        [Header("Target City Faction")]
+        [SerializeField] private int targetCityID = 1;
+
         [Header("Combat & Attack Parameters")]
         [SerializeField] private float attackDamage = 25.0f;
         [SerializeField] private float attackInterval = 2.0f;
@@ -39,7 +43,6 @@ namespace EcoDeLasCenizas.AI
         {
             if (navAgent == null || !navAgent.enabled) return;
 
-            // Periodically check if another wall section has lower HP
             if (Time.frameCount % 60 == 0)
             {
                 RecalculateTargetWallSection();
@@ -57,11 +60,12 @@ namespace EcoDeLasCenizas.AI
         }
 
         /// <summary>
-        /// Finds the city wall section with the lowest HP and sets it as the NavMesh destination.
+        /// Finds the city wall section with the lowest HP for targetCityID and sets it as destination.
         /// </summary>
         public void RecalculateTargetWallSection()
         {
-            if (CityWallHealthSync.Instance == null) return;
+            CityWallHealthSync wallSync = GameManager.Instance != null ? GameManager.Instance.GetWallForCity(targetCityID) : FindObjectOfType<CityWallHealthSync>();
+            if (wallSync == null) return;
 
             WallSection lowestSection = WallSection.North;
             float lowestHP = float.MaxValue;
@@ -69,7 +73,7 @@ namespace EcoDeLasCenizas.AI
             for (int i = 0; i < 4; i++)
             {
                 WallSection section = (WallSection)i;
-                WallStatus status = CityWallHealthSync.Instance.GetWallStatus(section);
+                WallStatus status = wallSync.GetWallStatus(section);
 
                 if (status.currentHP < lowestHP && status.currentHP > 0f)
                 {
@@ -87,7 +91,6 @@ namespace EcoDeLasCenizas.AI
             }
             else
             {
-                // Fallback movement toward origin/wall direction if waypoints not assigned
                 navAgent.SetDestination(Vector3.zero);
             }
         }
@@ -98,11 +101,12 @@ namespace EcoDeLasCenizas.AI
             {
                 nextAttackTimer = Time.time + attackInterval;
 
-                Debug.Log($"[EnemyAI] Sombra Helada ATTACKING {currentTargetWallSection} Wall for {attackDamage} DMG!");
+                Debug.Log($"[EnemyAI] Sombra Helada ATTACKING {currentTargetWallSection} Wall on City {targetCityID} for {attackDamage} DMG!");
 
-                if (CityWallHealthSync.Instance != null)
+                CityWallHealthSync wallSync = GameManager.Instance != null ? GameManager.Instance.GetWallForCity(targetCityID) : FindObjectOfType<CityWallHealthSync>();
+                if (wallSync != null)
                 {
-                    CityWallHealthSync.Instance.DamageWall(currentTargetWallSection, attackDamage);
+                    wallSync.DamageWall(currentTargetWallSection, attackDamage, -1);
                 }
             }
         }

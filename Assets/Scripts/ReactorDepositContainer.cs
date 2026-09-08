@@ -6,12 +6,14 @@ using EcoDeLasCenizas.Player;
 namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
-    /// Concrete IInteractable reactor container.
-    /// Transfers carried Ignicita from player inventory to the city reactor via [Command].
+    /// Server-authoritative IInteractable reactor container.
+    /// Identifies sender via connectionToClient, verifies interaction distance on Server,
+    /// and performs atomic transfer of carried Ignicita into reactor fuel.
     /// </summary>
     public class ReactorDepositContainer : NetworkBehaviour, IInteractable
     {
         [SerializeField] private int targetCityID = 1;
+        [SerializeField] private float maxInteractionDistance = 4.0f;
 
         public string GetInteractionPrompt()
         {
@@ -21,26 +23,43 @@ namespace EcoDeLasCenizas.Gameplay
         public void Interact(PlayerController player)
         {
             if (player == null || player.CarriedIgnicita <= 0f) return;
-
-            if (player.cityID != targetCityID)
-            {
-                Debug.LogWarning($"[ReactorDepositContainer] Rejected deposit from enemy Player CityID:{player.cityID}");
-                return;
-            }
-
-            float depositAmount = player.CarriedIgnicita;
-            player.ConsumeCarriedIgnicita(depositAmount);
-
-            CmdDepositIgnicita(depositAmount, player.cityID);
+            CmdDepositIgnite();
         }
 
         [Command(requiresAuthority = false)]
-        private void CmdDepositIgnicita(float amount, int pCityID)
+        private void CmdDepositIgnite(NetworkConnectionToClient senderConn = null)
         {
-            if (ReactorManager.Instance != null && ReactorManager.Instance.CityID == targetCityID)
+            NetworkConnectionToClient conn = senderConn ?? connectionToClient;
+            if (conn == null || conn.identity == null) return;
+
+            PlayerController player = conn.identity.GetComponent<PlayerController>();
+            if (player == null || player.IsDead) return;
+
+            if (player.cityID != targetCityID)
             {
-                ReactorManager.Instance.DepositIgnicita(amount, pCityID);
-                Debug.Log($"[ReactorDepositContainer SERVER] Deposit of {amount} Ignicita accepted from CityID:{pCityID}");
+                Debug.LogWarning($"[ReactorDepositContainer SERVER] Rejected deposit: Player CityID:{player.cityID} != Reactor CityID:{targetCityID}");
+                return;
+            }
+
+            // SERVER DISTANCE VALIDATION
+            float dist = Vector3.Distance(player.transform.position, transform.position);
+            if (dist > maxInteractionDistance)
+            {
+                Debug.LogWarning($"[ReactorDepositContainer SERVER] REJECTED deposit from {player.name}: Distance too far ({dist:F1}m > {maxInteractionDistance}m).");
+                return;
+            }
+
+            float amountToDeposit = player.CarriedIgnicita;
+            if (amountToDeposit <= 0f) return;
+
+            // ATOMIC TRANSFER ON SERVER
+            player.ConsumeCarriedIgnicita(amountToDeposit);
+
+            ReactorManager reactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(targetCityID) : FindObjectOfType<ReactorManager>();
+            if (reactor != null)
+            {
+                reactor.DepositIgnicita(amountToDeposit, targetCityID);
+                Debug.Log($"[ReactorDepositContainer SERVER] ATOMIC DEPOSIT SUCCESS: Transferred {amountToDeposit} Ignicita from Player {player.name} to City {targetCityID} Reactor.");
             }
         }
     }

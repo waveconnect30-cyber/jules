@@ -13,12 +13,14 @@ namespace EcoDeLasCenizas.Player
     /// - Scientist: Catalyst Booster (doubles fuel output via server DepositIgnicita)
     /// - Tactician: Battle Rally (+20% Defense to nearby allies)
     /// Input reading restricted to local player (isLocalPlayer).
+    /// Server validates currentHP > 0 and server cooldown timers before executing.
     /// </summary>
     public class ClassAbilities : NetworkBehaviour
     {
         [Header("Ability Settings")]
         [SerializeField] private float abilityCooldown = 15.0f;
         private float currentCooldownTimer = 0f;
+        [SyncVar] private float serverLastAbilityTimestamp = -100f;
 
         [Header("Explorer Scanner Prefab/VFX")]
         [SerializeField] private float scanRadius = 35.0f;
@@ -43,7 +45,6 @@ namespace EcoDeLasCenizas.Player
                 currentCooldownTimer -= Time.deltaTime;
             }
 
-            // INPUT RESTRICTION: Only local player checks keyboard or mobile touch inputs
             if (!isLocalPlayer) return;
 
             bool abilityInput = Input.GetKeyDown(KeyCode.Q) || (TouchScreenHUD.Instance != null && TouchScreenHUD.Instance.IsAbilityPressed);
@@ -63,9 +64,21 @@ namespace EcoDeLasCenizas.Player
         [Command]
         public void CmdExecuteAbility()
         {
-            if (playerController == null) return;
+            if (playerController == null || playerController.IsDead || playerController.CurrentHP <= 0f)
+            {
+                Debug.LogWarning("[ClassAbilities SERVER] REJECTED ability: Player is dead.");
+                return;
+            }
 
-            Debug.Log($"[ClassAbilities SERVER] Executing ability for Player (Class: {playerController.Class}, CityID: {playerController.cityID})");
+            // SERVER COOLDOWN VALIDATION
+            if (Time.time < serverLastAbilityTimestamp + (abilityCooldown - 0.5f))
+            {
+                Debug.LogWarning($"[ClassAbilities SERVER] REJECTED ability: Cooldown still active on server.");
+                return;
+            }
+
+            serverLastAbilityTimestamp = Time.time;
+            Debug.Log($"[ClassAbilities SERVER] Executing ability for Player {playerController.name} (Class: {playerController.Class}, CityID: {playerController.cityID})");
 
             switch (playerController.Class)
             {
@@ -117,9 +130,10 @@ namespace EcoDeLasCenizas.Player
         private void ExecuteScientistCatalystBooster()
         {
             Debug.Log("[ClassAbilities SERVER] Scientist CATALYST BOOSTER ACTIVATED. Fuel efficiency doubled.");
-            if (ReactorManager.Instance != null && ReactorManager.Instance.CityID == playerController.cityID)
+            ReactorManager reactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(playerController.cityID) : FindObjectOfType<ReactorManager>();
+            if (reactor != null)
             {
-                ReactorManager.Instance.DepositIgnicita(30f, playerController.cityID);
+                reactor.DepositIgnicita(30f, playerController.cityID);
             }
         }
 

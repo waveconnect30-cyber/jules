@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using Mirror;
@@ -15,9 +16,8 @@ namespace EcoDeLasCenizas.Gameplay
     }
 
     /// <summary>
-    /// Core Game Manager orchestrating phase cycles (Expedition vs. Siege vs. Council),
-    /// time management, and global team win/loss conditions.
-    /// Phase transitions execute strictly on [Server] and sync to clients via [SyncVar].
+    /// Core Game Manager orchestrating phase cycles and multi-city instance registry by cityID.
+    /// Manages lookups for Reactors, Walls, and Warehouses per cityID to isolate independent city states.
     /// </summary>
     public class GameManager : NetworkBehaviour
     {
@@ -28,6 +28,11 @@ namespace EcoDeLasCenizas.Gameplay
         [SerializeField] private float expeditionPhaseDuration = 180f; // 3 minutes
         [SerializeField] private float siegePhaseDuration = 120f;      // 2 minutes
         [SyncVar] private float phaseTimer = 0f;
+
+        [Header("Multi-City Systems Registry")]
+        private readonly Dictionary<int, ReactorManager> registeredReactors = new Dictionary<int, ReactorManager>();
+        private readonly Dictionary<int, CityWallHealthSync> registeredWalls = new Dictionary<int, CityWallHealthSync>();
+        private readonly Dictionary<int, SharedInventorySync> registeredWarehouses = new Dictionary<int, SharedInventorySync>();
 
         [Header("Events")]
         public UnityEvent<GamePhase> OnPhaseChanged;
@@ -51,24 +56,61 @@ namespace EcoDeLasCenizas.Gameplay
         {
             base.OnStartServer();
             TransitionToPhase(GamePhase.ExpeditionPhase);
+            RebuildMultiCityRegistries();
+        }
 
-            // Subscribe to defeat triggers on server
-            if (ReactorManager.Instance != null)
+        /// <summary>
+        /// Registers or refreshes multi-city system lookups in scene.
+        /// </summary>
+        public void RebuildMultiCityRegistries()
+        {
+            registeredReactors.Clear();
+            registeredWalls.Clear();
+            registeredWarehouses.Clear();
+
+            ReactorManager[] reactors = FindObjectsOfType<ReactorManager>();
+            foreach (var r in reactors)
             {
-                ReactorManager.Instance.OnCityFrozenSolid.AddListener(() => TriggerTeamDefeat("EL REACTOR SE CONGELÓ COMPLETAMENTE (-50°C). LA CALDERA HA CAÍDO."));
+                registeredReactors[r.CityID] = r;
             }
 
-            if (CityWallHealthSync.Instance != null)
+            CityWallHealthSync[] walls = FindObjectsOfType<CityWallHealthSync>();
+            foreach (var w in walls)
             {
-                CityWallHealthSync.Instance.OnWallBreached += (section) =>
-                {
-                    Debug.LogWarning($"[GameManager SERVER] {section} Wall breached! Entering emergency Siege phase.");
-                    if (currentPhase == GamePhase.ExpeditionPhase)
-                    {
-                        TransitionToPhase(GamePhase.SiegePhase);
-                    }
-                };
+                registeredWalls[w.cityID] = w;
             }
+
+            SharedInventorySync[] warehouses = FindObjectsOfType<SharedInventorySync>();
+            foreach (var wh in warehouses)
+            {
+                registeredWarehouses[wh.cityID] = wh;
+            }
+
+            Debug.Log($"[GameManager SERVER] Multi-city registry rebuilt: {registeredReactors.Count} Reactors, {registeredWalls.Count} Walls, {registeredWarehouses.Count} Warehouses.");
+        }
+
+        public ReactorManager GetReactorForCity(int cityID)
+        {
+            if (registeredReactors.TryGetValue(cityID, out ReactorManager r) && r != null) return r;
+            RebuildMultiCityRegistries();
+            registeredReactors.TryGetValue(cityID, out r);
+            return r;
+        }
+
+        public CityWallHealthSync GetWallForCity(int cityID)
+        {
+            if (registeredWalls.TryGetValue(cityID, out CityWallHealthSync w) && w != null) return w;
+            RebuildMultiCityRegistries();
+            registeredWalls.TryGetValue(cityID, out w);
+            return w;
+        }
+
+        public SharedInventorySync GetWarehouseForCity(int cityID)
+        {
+            if (registeredWarehouses.TryGetValue(cityID, out SharedInventorySync wh) && wh != null) return wh;
+            RebuildMultiCityRegistries();
+            registeredWarehouses.TryGetValue(cityID, out wh);
+            return wh;
         }
 
         private void Update()

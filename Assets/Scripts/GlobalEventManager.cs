@@ -16,7 +16,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Manages server-wide climate events, such as the 'Super Ice Storm' which accelerates
     /// temperature decay across all city reactors to -10°C/min and doubles ability cooldowns.
-    /// Event state is fully synchronized across all clients via [SyncVar].
+    /// Uses SyncVars to notify cooldown multipliers and temperature decay rates without stacking multipliers.
     /// </summary>
     public class GlobalEventManager : NetworkBehaviour
     {
@@ -25,6 +25,9 @@ namespace EcoDeLasCenizas.Gameplay
         [Header("Event State")]
         [SyncVar(hook = nameof(OnCurrentEventChanged))]
         public GlobalWeatherEvent activeEvent = GlobalWeatherEvent.ClearFog;
+
+        [SyncVar(hook = nameof(OnCooldownMultiplierChanged))]
+        public float currentCooldownMultiplier = 1.0f;
 
         [SyncVar] public float eventTimeRemaining = 0f;
 
@@ -61,13 +64,16 @@ namespace EcoDeLasCenizas.Gameplay
             activeEvent = weatherEvent;
             eventTimeRemaining = durationSeconds;
 
-            Debug.LogWarning($"[GlobalEventManager SERVER] GLOBAL CLIMATE EVENT STARTED: {weatherEvent} for {durationSeconds}s!");
-
             if (weatherEvent == GlobalWeatherEvent.SuperIceStorm)
             {
-                ApplySuperIceStormEffects(true);
+                currentCooldownMultiplier = 2.0f;
+            }
+            else
+            {
+                currentCooldownMultiplier = 1.0f;
             }
 
+            Debug.LogWarning($"[GlobalEventManager SERVER] GLOBAL CLIMATE EVENT STARTED: {weatherEvent} for {durationSeconds}s! Cooldown Mult: x{currentCooldownMultiplier}");
             RpcAnnounceEventStart(weatherEvent.ToString(), durationSeconds);
         }
 
@@ -76,29 +82,15 @@ namespace EcoDeLasCenizas.Gameplay
         {
             Debug.Log($"[GlobalEventManager SERVER] Global Event {activeEvent} ended. Restoring normal climate conditions.");
 
-            if (activeEvent == GlobalWeatherEvent.SuperIceStorm)
-            {
-                ApplySuperIceStormEffects(false);
-            }
-
             activeEvent = GlobalWeatherEvent.ClearFog;
+            currentCooldownMultiplier = 1.0f;
+
             RpcAnnounceEventEnded();
         }
 
-        [Server]
-        private void ApplySuperIceStormEffects(bool active)
+        private void OnCooldownMultiplierChanged(float oldMult, float newMult)
         {
-            float cooldownMultiplier = active ? 2.0f : 0.5f;
-
-            ClassAbilities[] abilities = FindObjectsOfType<ClassAbilities>();
-            foreach (var ab in abilities)
-            {
-                if (ab != null)
-                {
-                    ab.ModifyCooldown(cooldownMultiplier);
-                    Debug.LogWarning($"[GlobalEventManager SERVER] Player ability cooldowns modified x{cooldownMultiplier} for Super Ice Storm.");
-                }
-            }
+            Debug.Log($"[GlobalEventManager SyncVar] Cooldown multiplier updated on client: x{newMult}");
         }
 
         private void OnCurrentEventChanged(GlobalWeatherEvent oldEvt, GlobalWeatherEvent newEvt)

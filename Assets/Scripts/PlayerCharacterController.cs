@@ -11,6 +11,9 @@ namespace EcoDeLasCenizas.Player
     [RequireComponent(typeof(CharacterController))]
     public class PlayerCharacterController : MonoBehaviour
     {
+        [Header("Faction Configuration")]
+        [SerializeField] private int cityID = 1;
+
         [Header("Class Configuration")]
         [SerializeField] private CharacterClass selectedClass = CharacterClass.Explorer;
 
@@ -49,10 +52,11 @@ namespace EcoDeLasCenizas.Player
         {
             ApplyClassBaseStats();
 
-            if (ReactorManager.Instance != null)
+            ReactorManager reactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(cityID) : FindObjectOfType<ReactorManager>();
+            if (reactor != null)
             {
-                ReactorManager.Instance.OnPlayerMovementPenaltyChanged.AddListener(OnMovementPenaltyChanged);
-                OnMovementPenaltyChanged(ReactorManager.Instance.IsMovementSlowed);
+                reactor.OnPlayerMovementPenaltyChanged.AddListener(OnMovementPenaltyChanged);
+                OnMovementPenaltyChanged(reactor.IsMovementSlowed);
             }
         }
 
@@ -140,7 +144,6 @@ namespace EcoDeLasCenizas.Player
 
         private void HandleGrappleInput()
         {
-            // Grappling hook is exclusive to Explorer class
             if (selectedClass != CharacterClass.Explorer) return;
 
             if (Input.GetKeyDown(KeyCode.E))
@@ -180,9 +183,6 @@ namespace EcoDeLasCenizas.Player
             }
         }
 
-        /// <summary>
-        /// Handles speed penalties triggered by freezing temperatures (-10°C reduces speed by 20%).
-        /// </summary>
         public void OnMovementPenaltyChanged(bool isFrozen)
         {
             currentSpeedMultiplier = isFrozen ? 0.80f : 1.0f;

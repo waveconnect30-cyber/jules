@@ -11,6 +11,7 @@
 - ⚙️ **Dependencias Unity (Packages):** [`Packages/manifest.json`](./Packages/manifest.json)
 - ⚙️ **Versión de Unity Editor:** [`ProjectSettings/ProjectVersion.txt`](./ProjectSettings/ProjectVersion.txt) (`2022.3.10f1`)
 - 🤖 **Manifiesto de Permisos Android:** [`Assets/Plugins/Android/AndroidManifest.xml`](./Assets/Plugins/Android/AndroidManifest.xml)
+- 🎮 **Escena de Prueba Multijugador:** [`Assets/Scenes/TestScene.unity`](./Assets/Scenes/TestScene.unity)
 
 ---
 
@@ -19,24 +20,18 @@
 1. **Estructura de Proyecto Unity:**
    - Todos los C# scripts residen en `Assets/Scripts/` y los plugins móviles en `Assets/Plugins/`.
    - `Packages/manifest.json` incluye la dependencia oficial Git de **Mirror Networking** (`com.vis2k.mirror`).
-2. **Autoridad y Sincronización del Jugador (`PlayerController.cs`):**
-   - Movimiento e interacciones protegidos por `isLocalPlayer` / `hasAuthority`.
-   - Sincronización de `currentHP`, `cityID`, clase e inventario mediante `[SyncVar]`.
-   - Lógica de muerte y reaparición (`Respawn`) en servidor con punto de reaparición por `cityID`.
-3. **Implementaciones Concretas de Interacción (`IInteractable`):**
-   - `IgnicitaHarvestNode.cs`: Extracción de Ignicita a inventario.
-   - `ReactorDepositContainer.cs`: Depósito de combustible al reactor por `[Command]`.
-   - `CityWallRepairPanel.cs`: Reparación de muralla consumiendo materiales por `[Command]`.
-4. **Seguridad en Chat y Habilidades en Servidor (`MultiChannelChat.cs`, `ClassAbilities.cs`):**
-   - Emisor validado vía `NetworkConnectionToClient`. Mensajes de Ciudad/Alianza enviados por `TargetRpc` a clientes autorizados.
-   - Habilidades ejecutadas vía `[Command]` en el Servidor (incluyendo `NetworkServer.Spawn` para la torreta del Ingeniero).
-5. **Concejo, Saqueos y Servidor Dedicado (`CouncilVotingManager.cs`, `CityLootManager.cs`, `CityWallHealthSync.cs`):**
-   - Votos firmados por `netId` con registro único contra votos duplicados.
-   - Bloqueo de daño y saqueos entre ciudades con tratado de `Alliance` activo.
-   - Transiciones de fase procesadas directamente en Servidor Dedicado tras brecha de muralla.
-6. **Sincronización Climática y Daño Real (`GlobalEventManager.cs`, `CityAirlock.cs`):**
-   - Eventos sincronizados por `[SyncVar]` duplicando cooldowns de habilidades durante la Súper Tormenta.
-   - Daño real por exposición acumulada al frío tóxico en `CityAirlock.cs`.
+2. **Multi-City Registry e Aislamiento (`GameManager.cs`):**
+   - Registro centralizado por `cityID` (`GetReactorForCity`, `GetWallForCity`, `GetWarehouseForCity`) en `GameManager.cs` para aislar el estado de cada ciudad sin depender de singletons globales.
+3. **Comandos Autoritativos en Servidor:**
+   - **Harvest & Deposit:** `IgnicitaHarvestNode.cs` y `ReactorDepositContainer.cs` validan en el servidor la distancia de interacción y la conexión del cliente antes de transferir recursos.
+   - **Reparación de Muralla:** `CityWallRepairPanel.cs` valida distancia y verifica que el almacén compartido de la ciudad tenga suficiente Acero antes de reparar.
+   - **Habilidades de Clase:** `ClassAbilities.cs` valida que el jugador esté vivo (`currentHP > 0`) y verifica los cooldowns en el servidor antes de instanciar torretas (`NetworkServer.Spawn`).
+   - **Votación de Concejo:** `CouncilVotingManager.cs` lee la clase real del jugador desde su `PlayerController` guardado en el servidor, rechazando votos duplicados firmados por `netId`.
+4. **Seguridad en Chat y Filtro de Conexiones (`MultiChannelChat.cs`):**
+   - Identifica al emisor en el servidor vía `NetworkConnectionToClient`. Filtra los mensajes de canal de Ciudad y Alianza entregándolos vía `TargetRpc` a las conexiones autorizadas.
+5. **Aislamiento de UI y Clima Sincronizado (`ScreenFrostPostProcessUI.cs`, `GlobalEventManager.cs`):**
+   - Los bordes congelados en pantalla se activan en el cliente solo si la temperatura pertenece al reactor con su mismo `cityID`.
+   - `GlobalEventManager.cs` sincroniza eventos climatológicos vía `[SyncVar]`, duplicando los cooldowns durante la Súper Tormenta sin acumular multiplicadores.
 
 ---
 
@@ -80,9 +75,9 @@
 | Script | Descripción y Función Principal |
 | :--- | :--- |
 | `IInteractable.cs` | Interfaz limpia para objetos interactivos en el mundo 3D. |
-| `IgnicitaHarvestNode.cs` | Nodo de recolección de Ignicita en el mapa mundo. |
-| `ReactorDepositContainer.cs` | Depósito de combustible al reactor vía `[Command]`. |
-| `CityWallRepairPanel.cs` | Panel de reparación de murallas vía `[Command]`. |
+| `IgnicitaHarvestNode.cs` | Nodo de recolección de Ignicita validado en servidor por distancia. |
+| `ReactorDepositContainer.cs` | Depósito atómico de combustible al reactor por `[Command]` en servidor. |
+| `CityWallRepairPanel.cs` | Panel de reparación de murallas que verifica y descuenta Acero en servidor. |
 | `AssetPrefabLinker.cs` | Gestión de carpetas `Assets/Art/` (Models, Textures, Prefabs) y asignación dinámica de modelos 3D. |
 | `AndroidPermissionsManager.cs` | Gestión de permisos runtime en Android (`UnityEngine.Android.Permission`) y alerta UI. |
 | `TouchScreenHUD.cs` | UI móvil táctil con Joystick virtual y botones para salto, interacción y habilidades. |
@@ -91,22 +86,22 @@
 | `PlayerController.cs` | Controlador 3D adaptativo PC/Mobile con `cityID`, `isLocalPlayer`, SyncVars, reaparición y debuff de velocidad. |
 | `PlayerStatsManager.cs` | Gestión de atributos (`attackPower`, `maxHP`, `harvestSpeed`, `thermalResistance`) y bonificaciones por Ruinas. |
 | `RuinsNode.cs` | Ruinas capturables (4 Principales + 8 Secundarias) con buffs globales para la ciudad controladora. |
-| `WorldMapManager.cs` | Gestión del Mapa Mundial y asedio a la Ciudad Presidencial en (0,0,0) desbloqueado en Fase 3. |
+| `WorldMapManager.cs` | Gestión del Mapa Mundial e interacción `IInteractable` para asedio a la Ciudad Presidencial en (0,0,0). |
 | `CityAirlock.cs` | Transición al Mapa Mundial exterior y daño HP acumulativo por exposición a la niebla por jugador. |
-| `ReactorManager.cs` | Bucle de temperatura en servidor, SyncVar hooks para overlay helado, consumo e impuesto del Gobernador del 5%. |
+| `ReactorManager.cs` | Bucle de temperatura en servidor, SyncVar hooks para overlay helado por `cityID` e impuesto del Gobernador. |
 | `CityWallHealthSync.cs` | Sincronización en red de murallas por `cityID`, tratados de Alianza y cambio de fase en Servidor Dedicado. |
 | `SharedInventorySync.cs` | Almacén global por `cityID` e interfaz de saqueo (`RaidIgnicita`). |
-| `CityLootManager.cs` | Sistema de asalto y robo de recursos entre ciudades rivales validando brecha de muro/congelación y alianzas. |
+| `CityLootManager.cs` | Incursión y saqueo `IInteractable` entre ciudades rivales validando brechas/congelación y alianzas. |
 | `TerritoryNode.cs` | Nodos neutrales capturables que generan Ignicita pasiva cacheados en intervalos de 1 segundo. |
 | `DiplomacyManager.cs` | Sistema diplomático (Alliance, Neutral, War) entre facciones. |
 | `MultiChannelChat.cs` | Chat multicanal filtrado en servidor vía `TargetRpc` (Ciudad, Global, Alianza) y pings tácticos rápidos. |
-| `GlobalEventManager.cs` | Gestión de eventos climáticos globales (Súper Tormenta Helada con multiplicador de cooldowns x2 vía SyncVar). |
+| `GlobalEventManager.cs` | Gestión de eventos climáticos globales (Súper Tormenta Helada con multiplicador SyncVar x2 sin acumulación). |
 | `PlayerCharacterController.cs` | Movimiento en 3a persona, gancho de agarre del Explorador y debuff de velocidad. |
-| `ClassAbilities.cs` | Habilidades únicas activadas vía tecla Q o botón táctil móvil con comandos en Servidor. |
+| `ClassAbilities.cs` | Habilidades únicas activadas vía tecla Q o botón táctil móvil con comandos en Servidor y validación de vida/cooldown. |
 | `ReactorHUDUI.cs` | UI del termómetro central, barra de Ignicita e indicador de invernaderos. |
-| `ScreenFrostPostProcessUI.cs` | Efecto visual de bordes helados en pantalla y banner de advertencia. |
+| `ScreenFrostPostProcessUI.cs` | Efecto visual de bordes helados aislado por `cityID` del jugador local. |
 | `ClassSelectionUI.cs` | UI pre-spawn para elegir entre Explorador, Ingeniero, Científico y Táctico. |
-| `CouncilVotingManager.cs` | Votos firmados por `netId` con registro único contra votos duplicados. |
+| `CouncilVotingManager.cs` | Votos de Concejo firmados por `connectionId` validando clase en servidor contra votos duplicados. |
 | `EnemyAI.cs` | IA en NavMesh para Sombras Heladas que ataca el muro más debilitado. |
 | `NetworkLobbyManager.cs` | Creación y gestión de salas multijugador de 4 a 8 jugadores. |
-| `GameManager.cs` | Gestor del bucle de fases en servidor (Expedición, Asedio, Concejo) y condiciones de victoria/derrota. |
+| `GameManager.cs` | Registro de sistemas multi-ciudad por `cityID`, gestor de fases en servidor y condiciones de victoria/derrota. |
