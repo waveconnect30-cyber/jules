@@ -18,6 +18,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Core Game Manager orchestrating phase cycles and multi-city instance registry by cityID.
     /// Manages lookups for Reactors, Walls, and Warehouses per cityID to isolate independent city states.
+    /// Subscribes to OnCityFrozenSolid on the server to trigger city-specific defeat when a city's reactor freezes (-50°C).
     /// </summary>
     public class GameManager : NetworkBehaviour
     {
@@ -60,7 +61,7 @@ namespace EcoDeLasCenizas.Gameplay
         }
 
         /// <summary>
-        /// Registers or refreshes multi-city system lookups in scene.
+        /// Registers or refreshes multi-city system lookups in scene and hooks server defeat listeners.
         /// </summary>
         public void RebuildMultiCityRegistries()
         {
@@ -72,6 +73,15 @@ namespace EcoDeLasCenizas.Gameplay
             foreach (var r in reactors)
             {
                 registeredReactors[r.CityID] = r;
+
+                // Subscribe server to frozen solid defeat event for each city
+                int cityID = r.CityID;
+                r.OnCityFrozenSolid.RemoveAllListeners();
+                r.OnCityFrozenSolid.AddListener(() =>
+                {
+                    Debug.LogError($"[GameManager SERVER] REACTOR FROZEN SOLID (-50°C) IN CITY {cityID}! TRIGGERING CITY DEFEAT.");
+                    TriggerTeamDefeat($"EL REACTOR DE LA CIUDAD {cityID} SE CONGELÓ COMPLETAMENTE (-50°C). LA CALDERA HA CAÍDO.");
+                });
             }
 
             CityWallHealthSync[] walls = FindObjectsOfType<CityWallHealthSync>();

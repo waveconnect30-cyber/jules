@@ -8,7 +8,7 @@ namespace EcoDeLasCenizas.Player
 {
     /// <summary>
     /// Cross-platform 3D Player Controller with Mirror network authority protection, SyncVars,
-    /// server-authoritative death/respawn, and adaptive controls (PC & Android).
+    /// server-authoritative class selection, death/respawn, and adaptive controls (PC & Android).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class PlayerController : NetworkBehaviour
@@ -23,7 +23,7 @@ namespace EcoDeLasCenizas.Player
         [SyncVar] private bool isDead = false;
 
         [Header("Class & Identity")]
-        [SyncVar] [SerializeField] private CharacterClass characterClass = CharacterClass.Explorer;
+        [SyncVar(hook = nameof(OnCharacterClassSyncHook))] [SerializeField] private CharacterClass characterClass = CharacterClass.Explorer;
 
         [Header("Movement Configuration")]
         [SerializeField] private float walkSpeed = 5.0f;
@@ -89,6 +89,45 @@ namespace EcoDeLasCenizas.Player
                     walkSpeed = 5.0f;
                     sprintSpeed = 8.0f;
                     break;
+            }
+        }
+
+        /// <summary>
+        /// Command sent from local player client to select character class on server.
+        /// Validates class enum, assigns SyncVar, recalculates stats, and binds 3D model.
+        /// </summary>
+        [Command]
+        public void CmdSelectClass(CharacterClass chosenClass)
+        {
+            if (!System.Enum.IsDefined(typeof(CharacterClass), chosenClass))
+            {
+                Debug.LogWarning($"[PlayerController SERVER] Invalid CharacterClass enum: {chosenClass}");
+                return;
+            }
+
+            characterClass = chosenClass;
+            ApplyClassStats();
+
+            PlayerStatsManager stats = GetComponent<PlayerStatsManager>();
+            if (stats != null)
+            {
+                stats.RecalculateEffectiveStats();
+            }
+
+            if (AssetPrefabLinker.Instance != null)
+            {
+                AssetPrefabLinker.Instance.BindClassModelToPlayer(this, chosenClass);
+            }
+
+            Debug.Log($"[PlayerController SERVER] Player {name} assigned class {chosenClass}.");
+        }
+
+        private void OnCharacterClassSyncHook(CharacterClass oldClass, CharacterClass newClass)
+        {
+            ApplyClassStats();
+            if (AssetPrefabLinker.Instance != null)
+            {
+                AssetPrefabLinker.Instance.BindClassModelToPlayer(this, newClass);
             }
         }
 
