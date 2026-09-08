@@ -1,6 +1,7 @@
 using UnityEngine;
 using Mirror;
 using EcoDeLasCenizas.Core;
+using EcoDeLasCenizas.Player;
 
 namespace EcoDeLasCenizas.Gameplay
 {
@@ -14,7 +15,7 @@ namespace EcoDeLasCenizas.Gameplay
 
     /// <summary>
     /// Manages server-wide climate events, such as the 'Super Ice Storm' which accelerates
-    /// temperature decay across all city reactors to -10°C/min and doubles enemy spawn rates.
+    /// temperature decay across all city reactors to -10°C/min and doubles ability cooldowns.
     /// </summary>
     public class GlobalEventManager : NetworkBehaviour
     {
@@ -85,12 +86,15 @@ namespace EcoDeLasCenizas.Gameplay
 
         private void ApplySuperIceStormEffects(bool active)
         {
-            ReactorManager[] reactors = FindObjectsOfType<ReactorManager>();
-            foreach (var r in reactors)
+            float cooldownMultiplier = active ? 2.0f : 0.5f;
+
+            ClassAbilities[] abilities = FindObjectsOfType<ClassAbilities>();
+            foreach (var ab in abilities)
             {
-                if (r != null)
+                if (ab != null)
                 {
-                    Debug.LogWarning($"[GlobalEventManager] Reactor City:{r.CityID} freezing decay rate modified for Super Ice Storm.");
+                    ab.ModifyCooldown(cooldownMultiplier);
+                    Debug.LogWarning($"[GlobalEventManager] Player ability cooldowns modified x{cooldownMultiplier} for Super Ice Storm.");
                 }
             }
         }
@@ -103,7 +107,7 @@ namespace EcoDeLasCenizas.Gameplay
         [ClientRpc]
         private void RpcAnnounceEventStart(string eventName, float duration)
         {
-            Debug.LogError($"[GLOBAL CLIMATE ALERT] WARNING: {eventName} HAS BEGUN! Duration: {duration}s. Extreme freezing in effect!");
+            Debug.LogError($"[GLOBAL CLIMATE ALERT] WARNING: {eventName} HAS BEGUN! Duration: {duration}s. Extreme freezing and 2x ability cooldowns in effect!");
         }
 
         [ClientRpc]

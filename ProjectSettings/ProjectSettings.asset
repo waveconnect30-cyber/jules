@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 25
+  companyName: EcoDeLasCenizasStudio
+  productName: Eco de las Cenizas
+  defaultCursor: {fileID: 0}
+  cursorHotspot: {x: 0, y: 0}
+  m_BuildTargetIcons: []
+  m_BuildTargetPlatformIcons: []
+  m_BuildTargetBatchRes: []
+  m_BuildTargetGraphicsJobs: []
+  m_BuildTargetEnableNightMode: []
+  m_BuildTargetEnableAutoRotation: []
+  m_BuildTargetSupportedAspectRatios: []
+  m_BuildTargetSupportedOrientations: []
+  bundleVersion: 1.0.0
+  m_ScriptingDefineSymbols: {}

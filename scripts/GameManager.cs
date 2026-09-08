@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Events;
+using Mirror;
 using EcoDeLasCenizas.Core;
 using EcoDeLasCenizas.Networking;
 
@@ -16,16 +17,17 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Core Game Manager orchestrating phase cycles (Expedition vs. Siege vs. Council),
     /// time management, and global team win/loss conditions.
+    /// Phase transitions execute strictly on [Server] and sync to clients via [SyncVar].
     /// </summary>
-    public class GameManager : MonoBehaviour
+    public class GameManager : NetworkBehaviour
     {
         public static GameManager Instance { get; private set; }
 
         [Header("Phase Management")]
-        [SerializeField] private GamePhase currentPhase = GamePhase.ExpeditionPhase;
+        [SyncVar(hook = nameof(OnPhaseSyncHook))] [SerializeField] private GamePhase currentPhase = GamePhase.ExpeditionPhase;
         [SerializeField] private float expeditionPhaseDuration = 180f; // 3 minutes
         [SerializeField] private float siegePhaseDuration = 120f;      // 2 minutes
-        private float phaseTimer = 0f;
+        [SyncVar] private float phaseTimer = 0f;
 
         [Header("Events")]
         public UnityEvent<GamePhase> OnPhaseChanged;
@@ -45,11 +47,12 @@ namespace EcoDeLasCenizas.Gameplay
             Instance = this;
         }
 
-        private void Start()
+        public override void OnStartServer()
         {
+            base.OnStartServer();
             TransitionToPhase(GamePhase.ExpeditionPhase);
 
-            // Subscribe to defeat triggers
+            // Subscribe to defeat triggers on server
             if (ReactorManager.Instance != null)
             {
                 ReactorManager.Instance.OnCityFrozenSolid.AddListener(() => TriggerTeamDefeat("EL REACTOR SE CONGELÓ COMPLETAMENTE (-50°C). LA CALDERA HA CAÍDO."));
@@ -59,7 +62,7 @@ namespace EcoDeLasCenizas.Gameplay
             {
                 CityWallHealthSync.Instance.OnWallBreached += (section) =>
                 {
-                    Debug.LogWarning($"[GameManager] {section} Wall breached! Entering emergency Siege phase.");
+                    Debug.LogWarning($"[GameManager SERVER] {section} Wall breached! Entering emergency Siege phase.");
                     if (currentPhase == GamePhase.ExpeditionPhase)
                     {
                         TransitionToPhase(GamePhase.SiegePhase);
@@ -70,7 +73,7 @@ namespace EcoDeLasCenizas.Gameplay
 
         private void Update()
         {
-            if (currentPhase == GamePhase.GameOver) return;
+            if (!isServer || currentPhase == GamePhase.GameOver) return;
 
             phaseTimer -= Time.deltaTime;
 
@@ -80,17 +83,18 @@ namespace EcoDeLasCenizas.Gameplay
             }
         }
 
+        [Server]
         private void AdvanceGameCycle()
         {
             switch (currentPhase)
             {
                 case GamePhase.ExpeditionPhase:
-                    Debug.Log("[GameManager] EXPEDITION PHASE ENDED. NIEBLA HELADA DENSIFYING -> ENTERING SIEGE PHASE!");
+                    Debug.Log("[GameManager SERVER] EXPEDITION PHASE ENDED. NIEBLA HELADA DENSIFYING -> ENTERING SIEGE PHASE!");
                     TransitionToPhase(GamePhase.SiegePhase);
                     break;
 
                 case GamePhase.SiegePhase:
-                    Debug.Log("[GameManager] SIEGE PHASE SURVIVED! OPENING COUNCIL VOTING SESSION...");
+                    Debug.Log("[GameManager SERVER] SIEGE PHASE SURVIVED! OPENING COUNCIL VOTING SESSION...");
                     TransitionToPhase(GamePhase.CouncilPhase);
                     if (CouncilVotingManager.Instance != null)
                     {
@@ -99,12 +103,13 @@ namespace EcoDeLasCenizas.Gameplay
                     break;
 
                 case GamePhase.CouncilPhase:
-                    Debug.Log("[GameManager] COUNCIL VOTING CONCLUDED -> STARTING NEW EXPEDITION CYCLE.");
+                    Debug.Log("[GameManager SERVER] COUNCIL VOTING CONCLUDED -> STARTING NEW EXPEDITION CYCLE.");
                     TransitionToPhase(GamePhase.ExpeditionPhase);
                     break;
             }
         }
 
+        [Server]
         public void TransitionToPhase(GamePhase newPhase)
         {
             currentPhase = newPhase;
@@ -121,25 +126,42 @@ namespace EcoDeLasCenizas.Gameplay
                     phaseTimer = 30f;
                     break;
             }
-
-            OnPhaseChanged?.Invoke(currentPhase);
         }
 
+        private void OnPhaseSyncHook(GamePhase oldVal, GamePhase newVal)
+        {
+            OnPhaseChanged?.Invoke(newVal);
+        }
+
+        [Server]
         public void TriggerTeamDefeat(string reason)
         {
             if (currentPhase == GamePhase.GameOver) return;
 
             currentPhase = GamePhase.GameOver;
-            Debug.LogError($"[GameManager] TEAM DEFEAT TRIGGERED: {reason}");
-            OnTeamDefeat?.Invoke(reason);
+            Debug.LogError($"[GameManager SERVER] TEAM DEFEAT TRIGGERED: {reason}");
+            RpcNotifyTeamDefeat(reason);
         }
 
+        [Server]
         public void TriggerTeamVictory()
         {
             if (currentPhase == GamePhase.GameOver) return;
 
             currentPhase = GamePhase.GameOver;
-            Debug.Log("[GameManager] TEAM VICTORY! LA CALDERA SURVIVED THE WINTER STORM!");
+            Debug.Log("[GameManager SERVER] TEAM VICTORY! LA CALDERA SURVIVED THE WINTER STORM!");
+            RpcNotifyTeamVictory();
+        }
+
+        [ClientRpc]
+        private void RpcNotifyTeamDefeat(string reason)
+        {
+            OnTeamDefeat?.Invoke(reason);
+        }
+
+        [ClientRpc]
+        private void RpcNotifyTeamVictory()
+        {
             OnTeamVictory?.Invoke();
         }
     }

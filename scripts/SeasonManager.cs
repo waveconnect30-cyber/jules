@@ -16,6 +16,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// Controls the 14-day seasonal cycle, managing raid immunity during Settlement,
     /// Presidential City capital capture in Siege phase, Governor 5% global Ignicita tax,
     /// and Overload Wipe end-of-season rewards.
+    /// Resets capital hold timer when ownership changes and triggers Governor crown as a one-shot event.
     /// </summary>
     public class SeasonManager : NetworkBehaviour
     {
@@ -31,10 +32,12 @@ namespace EcoDeLasCenizas.Gameplay
         [Header("Governor System")]
         [SyncVar] public int governorCityID = 0; // 0 = No Governor
         [SerializeField] private float governorTaxPercentage = 0.05f; // 5% global Ignicita tax
+        private bool isGovernorCrowned = false;
 
         [Header("Presidential Siege Hold Victory")]
         [SyncVar] public float capitalHoldTimerSeconds = 0f;
         [SerializeField] private float requiredHoldSecondsForVictory = 10800f; // 3 hours (10,800 seconds)
+        private int previousCapitalOwner = -1;
 
         private void Awake()
         {
@@ -58,11 +61,22 @@ namespace EcoDeLasCenizas.Gameplay
             if (currentSeasonPhase == SeasonPhase.PresidentialSiege && WorldMapManager.Instance != null)
             {
                 int capitalOwner = WorldMapManager.Instance.capitalControllingCityID;
-                if (capitalOwner > 0)
+
+                // Reset timer if ownership changed
+                if (capitalOwner != previousCapitalOwner)
+                {
+                    previousCapitalOwner = capitalOwner;
+                    capitalHoldTimerSeconds = 0f;
+                    isGovernorCrowned = false;
+                    Debug.Log($"[SeasonManager SERVER] Capital owner changed to City {capitalOwner}. Resetting hold timer to 0.");
+                }
+
+                if (capitalOwner > 0 && !isGovernorCrowned)
                 {
                     capitalHoldTimerSeconds += Time.deltaTime;
                     if (capitalHoldTimerSeconds >= requiredHoldSecondsForVictory)
                     {
+                        isGovernorCrowned = true;
                         governorCityID = capitalOwner;
                         Debug.LogWarning($"[SeasonManager SERVER] CITY {governorCityID} HELD CAPITAL FOR 3 HOURS! GOVERNOR TITLE GRANTED!");
                         RpcAnnounceGovernorCrown(governorCityID);

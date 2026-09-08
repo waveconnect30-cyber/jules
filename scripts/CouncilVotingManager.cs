@@ -28,10 +28,12 @@ namespace EcoDeLasCenizas.Gameplay
         public bool isSessionActive = false;
 
         public Dictionary<PolicyOption, float> voteTally = new Dictionary<PolicyOption, float>();
+        public HashSet<string> votedPlayerIDs = new HashSet<string>();
     }
 
     /// <summary>
     /// Manages the democratic Council voting sessions for distributing scarce community resources.
+    /// Tracks unique PlayerIDs to reject duplicate vote attempts in the same session.
     /// Incorporates weighted class votes (e.g. Engineer x2 on infrastructure, Scientist x2 on food).
     /// </summary>
     public class CouncilVotingManager : MonoBehaviour
@@ -90,9 +92,9 @@ namespace EcoDeLasCenizas.Gameplay
         }
 
         /// <summary>
-        /// Casts a vote weighted by the player's character class.
+        /// Casts a vote weighted by character class. Rejects duplicate votes from the same playerID.
         /// </summary>
-        public void CastVote(CharacterClass playerClass, PolicyOption chosenOption)
+        public void CastVote(string playerID, CharacterClass playerClass, PolicyOption chosenOption)
         {
             if (currentSession == null || !currentSession.isSessionActive)
             {
@@ -100,11 +102,24 @@ namespace EcoDeLasCenizas.Gameplay
                 return;
             }
 
+            if (currentSession.votedPlayerIDs.Contains(playerID))
+            {
+                Debug.LogWarning($"[CouncilVotingManager] DUPLICATE VOTE REJECTED: Player {playerID} has already voted in this session!");
+                return;
+            }
+
+            currentSession.votedPlayerIDs.Add(playerID);
+
             float voteWeight = GetVoteWeightForClass(playerClass, chosenOption);
             currentSession.voteTally[chosenOption] += voteWeight;
 
-            Debug.Log($"[CouncilVotingManager] Vote cast by {playerClass} for {chosenOption} (Weight: {voteWeight}). New Total: {currentSession.voteTally[chosenOption]}");
+            Debug.Log($"[CouncilVotingManager] Vote cast by Player {playerID} ({playerClass}) for {chosenOption} (Weight: {voteWeight}). New Total: {currentSession.voteTally[chosenOption]}");
             OnVoteCast?.Invoke(chosenOption, currentSession.voteTally[chosenOption]);
+        }
+
+        public void CastVote(CharacterClass playerClass, PolicyOption chosenOption)
+        {
+            CastVote("DefaultPlayer", playerClass, chosenOption);
         }
 
         /// <summary>
@@ -149,7 +164,7 @@ namespace EcoDeLasCenizas.Gameplay
                 }
             }
 
-            Debug.Log($"[CouncilVotingManager] VOTING CONCLUDED. Winning Policy: {winningOption} with {highestVotes} weighted votes.");
+            Debug.Log($"[CouncilVotingManager] VOTING CONCLUDED. Winning Policy: {winningOption} with {highestVotes} weighted votes from {currentSession.votedPlayerIDs.Count} unique players.");
             ApplyPolicyEffects(winningOption);
 
             OnVotingEnded?.Invoke(winningOption);

@@ -1,6 +1,7 @@
 using UnityEngine;
 using EcoDeLasCenizas.Gameplay;
 using EcoDeLasCenizas.Core;
+using EcoDeLasCenizas.UI;
 
 namespace EcoDeLasCenizas.Player
 {
@@ -10,6 +11,7 @@ namespace EcoDeLasCenizas.Player
     /// - Engineer: Automated Thermal Repair Turret
     /// - Scientist: Catalyst Booster (doubles fuel output)
     /// - Tactician: Battle Rally (+20% Defense to nearby allies)
+    /// Triggers via PC KeyCode.Q or Mobile TouchScreenHUD IsAbilityPressed signal.
     /// </summary>
     public class ClassAbilities : MonoBehaviour
     {
@@ -25,6 +27,9 @@ namespace EcoDeLasCenizas.Player
 
         private PlayerController playerController;
 
+        public float AbilityCooldown => abilityCooldown;
+        public float CurrentCooldownTimer => currentCooldownTimer;
+
         private void Awake()
         {
             playerController = GetComponent<PlayerController>();
@@ -37,10 +42,18 @@ namespace EcoDeLasCenizas.Player
                 currentCooldownTimer -= Time.deltaTime;
             }
 
-            if (Input.GetKeyDown(KeyCode.Q) && currentCooldownTimer <= 0f)
+            // Check Keyboard 'Q' or Mobile Touch Ability Button
+            bool abilityInput = Input.GetKeyDown(KeyCode.Q) || (TouchScreenHUD.Instance != null && TouchScreenHUD.Instance.IsAbilityPressed);
+
+            if (abilityInput && currentCooldownTimer <= 0f)
             {
                 TriggerClassAbility();
             }
+        }
+
+        public void ModifyCooldown(float multiplier)
+        {
+            abilityCooldown *= multiplier;
         }
 
         public void TriggerClassAbility()

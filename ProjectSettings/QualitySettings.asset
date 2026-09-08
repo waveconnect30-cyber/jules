@@ -1,0 +1,14 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!47 &1
+QualitySettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 14
+  m_CurrentQuality: 3
+  m_QualitySettings:
+  - name: Ultra Mobile
+    pixelLightCount: 1
+    shadows: 1
+  - name: PC High
+    pixelLightCount: 4
+    shadows: 2

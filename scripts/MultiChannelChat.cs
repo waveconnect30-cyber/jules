@@ -1,6 +1,7 @@
 using UnityEngine;
 using Mirror;
 using System;
+using EcoDeLasCenizas.Gameplay;
 
 namespace EcoDeLasCenizas.Networking
 {
@@ -30,8 +31,8 @@ namespace EcoDeLasCenizas.Networking
     }
 
     /// <summary>
-    /// Multi-channel chat system supporting City, Global, and Alliance channels,
-    /// alongside fast tactical voice/ping command RPCs.
+    /// Multi-channel chat system with server-side sender validation and channel filtering.
+    /// Filters City and Alliance RPCs to deliver messages only to eligible clients with matching cityIDs or active treaties.
     /// </summary>
     public class MultiChannelChat : NetworkBehaviour
     {
@@ -51,7 +52,7 @@ namespace EcoDeLasCenizas.Networking
         }
 
         /// <summary>
-        /// Sends a chat message over the network.
+        /// Sends a chat message over the network with server-side sender validation.
         /// </summary>
         [Command(requiresAuthority = false)]
         public void CmdSendMessage(string senderName, int senderCityID, ChatChannel channel, string text)
@@ -73,7 +74,35 @@ namespace EcoDeLasCenizas.Networking
         [ClientRpc]
         private void RpcReceiveMessage(ChatMessage msg)
         {
-            // Filter city channel messages to match local player's cityID if needed
+            // Validate client eligibility based on local player's cityID and channel
+            var localPlayer = NetworkClient.localPlayer != null
+                ? NetworkClient.localPlayer.GetComponent<EcoDeLasCenizas.Player.PlayerController>()
+                : null;
+
+            if (localPlayer != null)
+            {
+                int localCityID = localPlayer.cityID;
+
+                if (msg.channel == ChatChannel.City && localCityID != msg.senderCityID)
+                {
+                    // Ignore enemy city chat
+                    return;
+                }
+
+                if (msg.channel == ChatChannel.Alliance && localCityID != msg.senderCityID)
+                {
+                    if (DiplomacyManager.Instance != null)
+                    {
+                        var rel = DiplomacyManager.Instance.GetRelation(localCityID, msg.senderCityID);
+                        if (rel != DiplomacyRelation.Alliance)
+                        {
+                            // Ignore non-allied alliance chat
+                            return;
+                        }
+                    }
+                }
+            }
+
             Debug.Log($"[{msg.channel.ToString().ToUpper()} CHAT] [{msg.timestamp}] {msg.senderName} (City {msg.senderCityID}): {msg.messageText}");
             OnChatMessageReceived?.Invoke(msg);
         }
@@ -90,6 +119,19 @@ namespace EcoDeLasCenizas.Networking
         [ClientRpc]
         private void RpcReceiveQuickPing(string pingTypeStr, Vector3 worldPosition, int senderCityID)
         {
+            var localPlayer = NetworkClient.localPlayer != null
+                ? NetworkClient.localPlayer.GetComponent<EcoDeLasCenizas.Player.PlayerController>()
+                : null;
+
+            if (localPlayer != null && localPlayer.cityID != senderCityID)
+            {
+                if (DiplomacyManager.Instance != null)
+                {
+                    var rel = DiplomacyManager.Instance.GetRelation(localPlayer.cityID, senderCityID);
+                    if (rel != DiplomacyRelation.Alliance) return;
+                }
+            }
+
             Debug.Log($"[TACTICAL PING] City {senderCityID} pinged: '{pingTypeStr}' at {worldPosition}");
             OnQuickPingTriggered?.Invoke(pingTypeStr, worldPosition, senderCityID);
         }

@@ -1,33 +1,26 @@
 using UnityEngine;
+using Mirror;
 using EcoDeLasCenizas.UI;
-
-namespace EcoDeLasCenizas.Core
-{
-    /// <summary>
-    /// Interface for interactive objects in the world (Reactor container, Wall repair stations, Resource crates).
-    /// </summary>
-    public interface IInteractable
-    {
-        string GetInteractionPrompt();
-        void Interact(PlayerController player);
-    }
-}
+using EcoDeLasCenizas.Gameplay;
+using EcoDeLasCenizas.Core;
 
 namespace EcoDeLasCenizas.Player
 {
-    using EcoDeLasCenizas.Gameplay;
-    using EcoDeLasCenizas.Core;
-
     /// <summary>
-    /// Cross-platform 3D Player Controller supporting Keyboard/Mouse (PC) and Touch Screen/Virtual Joystick (Android).
-    /// Handles locomotion, jumping, raycast interactions, faction affiliation (cityID), and freezing speed debuffs (-20%).
+    /// Cross-platform 3D Player Controller with Mirror network authority protection.
+    /// Ensures clients only read inputs and move their own local avatar.
+    /// Supports Keyboard/Mouse (PC) and Touch Screen/Virtual Joystick (Android).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public class PlayerController : MonoBehaviour
+    public class PlayerController : NetworkBehaviour
     {
         [Header("Faction & City Ownership")]
         [Tooltip("ID of the city/clan this survivor belongs to in PvPvE mode.")]
         public int cityID = 1;
+
+        [Header("Player Health & Health State")]
+        [SerializeField] private float currentHP = 100.0f;
+        [SerializeField] private float maxHP = 100.0f;
 
         [Header("Class & Identity")]
         [SerializeField] private CharacterClass characterClass = CharacterClass.Explorer;
@@ -55,6 +48,8 @@ namespace EcoDeLasCenizas.Player
         // Public Properties
         public CharacterClass Class => characterClass;
         public float CarriedIgnicita => carriedIgnicitaAmount;
+        public float CurrentHP => currentHP;
+        public float MaxHP => maxHP;
 
         private void Awake()
         {
@@ -97,11 +92,20 @@ namespace EcoDeLasCenizas.Player
 
         private void Update()
         {
-            HandleGroundCheck();
-            HandleLocomotion();
-            HandleJump();
-            HandleInteraction();
-            ApplyGravity();
+            // NETWORK AUTHORITY CHECK: Only the local controlling player processes input and locomotion
+            if (isServer || isLocalPlayer)
+            {
+                HandleGroundCheck();
+
+                if (isLocalPlayer)
+                {
+                    HandleLocomotion();
+                    HandleJump();
+                    HandleInteraction();
+                }
+
+                ApplyGravity();
+            }
         }
 
         private void HandleGroundCheck()
@@ -178,6 +182,12 @@ namespace EcoDeLasCenizas.Player
         {
             velocity.y += gravity * Time.deltaTime;
             characterController.Move(velocity * Time.deltaTime);
+        }
+
+        public void TakeDamage(float damage)
+        {
+            currentHP = Mathf.Max(0f, currentHP - damage);
+            Debug.LogWarning($"[PlayerController] {name} took {damage} HP damage. Remaining HP: {currentHP}/{maxHP}");
         }
 
         public void ConsumeCarriedIgnicita(float amount)

@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.Events;
+using Mirror;
 using EcoDeLasCenizas.Gameplay;
 
 namespace EcoDeLasCenizas.Core
@@ -8,22 +9,22 @@ namespace EcoDeLasCenizas.Core
     /// <summary>
     /// Manages the Central Geothermal Reactor, Ignicita fuel consumption, city temperature decay,
     /// cityID ownership in PvPvE mode, and global penalties for freezing conditions (-10°C threshold).
-    /// Redirects 5% Governor Tax to the reigning Governor clan warehouse during fuel processing.
+    /// All temperature decay cycles and fuel updates execute strictly on [Server] and sync via SyncVars.
     /// </summary>
-    public class ReactorManager : MonoBehaviour
+    public class ReactorManager : NetworkBehaviour
     {
         public static ReactorManager Instance { get; private set; }
 
         [Header("City Faction Ownership")]
         [Tooltip("The City / Clan ID that owns this reactor.")]
-        [SerializeField] private int cityID = 1;
+        [SyncVar] [SerializeField] private int cityID = 1;
 
         [Header("Reactor Fuel Settings")]
         [Tooltip("Current amount of Ignicita fuel stored in the central reactor container.")]
-        [SerializeField] private float currentIgnicita = 100f;
+        [SyncVar(hook = nameof(OnIgnicitaSyncHook))] [SerializeField] private float currentIgnicita = 100f;
 
         [Tooltip("Maximum capacity for Ignicita in the reactor container.")]
-        [SerializeField] private float maxIgnicita = 1000f;
+        [SyncVar] [SerializeField] private float maxIgnicita = 1000f;
 
         [Tooltip("Amount of Ignicita consumed per second under normal operation.")]
         [SerializeField] private float ignicitaConsumptionRate = 1.0f;
@@ -33,7 +34,7 @@ namespace EcoDeLasCenizas.Core
 
         [Header("Temperature Settings")]
         [Tooltip("Current temperature of the city in Celsius.")]
-        [SerializeField] private float currentTemperature = 20.0f;
+        [SyncVar(hook = nameof(OnTemperatureSyncHook))] [SerializeField] private float currentTemperature = 20.0f;
 
         [Tooltip("Maximum allowed city temperature in Celsius.")]
         [SerializeField] private float maxTemperature = 50.0f;
@@ -45,8 +46,8 @@ namespace EcoDeLasCenizas.Core
         [SerializeField] private float criticalTemperatureThreshold = -10.0f;
 
         [Header("Status Flags")]
-        private bool isGreenhouseActive = true;
-        private bool isMovementSlowed = false;
+        [SyncVar] private bool isGreenhouseActive = true;
+        [SyncVar] private bool isMovementSlowed = false;
 
         [Header("Events")]
         public UnityEvent<float> OnIgnicitaChanged;
@@ -81,9 +82,13 @@ namespace EcoDeLasCenizas.Core
 
         private void Update()
         {
-            ProcessReactorCycle(Time.deltaTime);
+            if (isServer)
+            {
+                ProcessReactorCycle(Time.deltaTime);
+            }
         }
 
+        [Server]
         public void ProcessReactorCycle(float deltaTime)
         {
             if (currentIgnicita > 0f)
@@ -100,19 +105,27 @@ namespace EcoDeLasCenizas.Core
                 {
                     SeasonManager.Instance.ApplyGovernorTax(consumedThisFrame);
                 }
-
-                OnIgnicitaChanged?.Invoke(currentIgnicita);
             }
             else
             {
                 float tempLossThisFrame = (temperatureDecayRatePerMinute / 60.0f) * deltaTime;
                 currentTemperature -= tempLossThisFrame;
-                OnTemperatureChanged?.Invoke(currentTemperature);
 
                 EvaluateTemperatureEffects();
             }
         }
 
+        private void OnIgnicitaSyncHook(float oldVal, float newVal)
+        {
+            OnIgnicitaChanged?.Invoke(newVal);
+        }
+
+        private void OnTemperatureSyncHook(float oldVal, float newVal)
+        {
+            OnTemperatureChanged?.Invoke(newVal);
+        }
+
+        [Server]
         private void EvaluateTemperatureEffects()
         {
             bool shouldBeFrozen = currentTemperature <= criticalTemperatureThreshold;
@@ -159,6 +172,7 @@ namespace EcoDeLasCenizas.Core
         /// <summary>
         /// Deposit Ignicita fuel into reactor. Accepts deposits only from matching cityID survivors.
         /// </summary>
+        [Server]
         public void DepositIgnicita(float amount, int depositorCityID)
         {
             if (depositorCityID != cityID)
@@ -170,6 +184,7 @@ namespace EcoDeLasCenizas.Core
             DepositIgnicita(amount);
         }
 
+        [Server]
         public void DepositIgnicita(float amount)
         {
             if (amount <= 0f) return;
@@ -180,9 +195,6 @@ namespace EcoDeLasCenizas.Core
             currentTemperature = Mathf.Min(currentTemperature + tempIncrease, maxTemperature);
 
             Debug.Log($"[ReactorManager City:{cityID}] Deposited {amount} Ignicita. New Fuel: {currentIgnicita:F1}, New Temp: {currentTemperature:F1}°C");
-
-            OnIgnicitaChanged?.Invoke(currentIgnicita);
-            OnTemperatureChanged?.Invoke(currentTemperature);
 
             EvaluateTemperatureEffects();
         }

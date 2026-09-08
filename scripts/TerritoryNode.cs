@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
 using EcoDeLasCenizas.Networking;
@@ -7,8 +8,8 @@ namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
     /// Capturable neutral control point located in the wild fog area.
-    /// When a player clan holds the area for X seconds, it generates a passive stream of Ignicita
-    /// directly into that clan's city warehouse.
+    /// Caches warehouse references by cityID and batches resource payouts in 1-second intervals
+    /// to eliminate per-frame FindObjectsOfType overhead.
     /// </summary>
     public class TerritoryNode : NetworkBehaviour
     {
@@ -22,25 +23,51 @@ namespace EcoDeLasCenizas.Gameplay
         [SyncVar] public float currentCaptureProgress = 0f;
         [SyncVar] public int capturingCityID = 0;
 
+        // Optimization: Cache warehouse instances by cityID and interval timer
+        private readonly Dictionary<int, SharedInventorySync> cachedWarehouses = new Dictionary<int, SharedInventorySync>();
+        private float payoutIntervalTimer = 0f;
+
         private void Update()
         {
             if (!isServer) return;
 
-            // Passive resource generation for controlling city
+            // Batched passive resource payout every 1.0 second interval
             if (controllingCityID > 0)
             {
-                float generatedAmount = passiveIgnicitaGenerationRate * Time.deltaTime;
+                payoutIntervalTimer += Time.deltaTime;
 
-                SharedInventorySync[] warehouses = FindObjectsOfType<SharedInventorySync>();
-                foreach (var warehouse in warehouses)
+                if (payoutIntervalTimer >= 1.0f)
                 {
-                    if (warehouse.cityID == controllingCityID)
+                    float payoutAmount = passiveIgnicitaGenerationRate * payoutIntervalTimer;
+                    payoutIntervalTimer = 0f;
+
+                    SharedInventorySync targetWarehouse = GetCachedWarehouse(controllingCityID);
+                    if (targetWarehouse != null)
                     {
-                        warehouse.AddIgnicitaToWarehouse(generatedAmount, controllingCityID);
-                        break;
+                        targetWarehouse.AddIgnicitaToWarehouse(payoutAmount, controllingCityID);
                     }
                 }
             }
+        }
+
+        private SharedInventorySync GetCachedWarehouse(int cID)
+        {
+            if (cachedWarehouses.TryGetValue(cID, out SharedInventorySync wh) && wh != null)
+            {
+                return wh;
+            }
+
+            SharedInventorySync[] warehouses = FindObjectsOfType<SharedInventorySync>();
+            foreach (var warehouse in warehouses)
+            {
+                if (warehouse.cityID == cID)
+                {
+                    cachedWarehouses[cID] = warehouse;
+                    return warehouse;
+                }
+            }
+
+            return null;
         }
 
         private void OnTriggerStay(Collider other)
@@ -52,7 +79,6 @@ namespace EcoDeLasCenizas.Gameplay
 
             int playerCityID = player.cityID;
 
-            // If node already owned by player's city, nothing to capture
             if (playerCityID == controllingCityID) return;
 
             if (capturingCityID != playerCityID)
@@ -67,7 +93,7 @@ namespace EcoDeLasCenizas.Gameplay
             {
                 controllingCityID = playerCityID;
                 currentCaptureProgress = 0f;
-                Debug.Log($"[TerritoryNode] {nodeName} CAPTURED by City {controllingCityID}!");
+                Debug.Log($"[TerritoryNode SERVER] {nodeName} CAPTURED by City {controllingCityID}!");
                 RpcAnnounceNodeCaptured(nodeName, controllingCityID);
             }
         }

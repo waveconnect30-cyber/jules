@@ -1,0 +1,2 @@
+enableNativePlatformBackendsForNewInputSystem: 1
+disableOldInputManagerSupport: 0

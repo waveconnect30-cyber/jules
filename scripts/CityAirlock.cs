@@ -7,7 +7,8 @@ namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
     /// Handles player transition through the city airlock into the hazardous World Map.
-    /// Tracks per-player fog exposure time when players step outside protected city/ruin thermal domes.
+    /// Tracks per-player fog exposure time when players step outside protected city/ruin thermal domes,
+    /// deducting actual player HP when exposure exceeds safe limits.
     /// </summary>
     public class CityAirlock : NetworkBehaviour
     {
@@ -47,6 +48,8 @@ namespace EcoDeLasCenizas.Gameplay
 
         private void Update()
         {
+            if (!isServer) return;
+
             List<PlayerController> trackedPlayers = new List<PlayerController>(playerExposureTimers.Keys);
 
             foreach (var player in trackedPlayers)
@@ -63,7 +66,9 @@ namespace EcoDeLasCenizas.Gameplay
 
                     if (playerExposureTimers[player] >= maxSafeFogExposureSeconds)
                     {
-                        Debug.LogWarning($"[CityAirlock] FOG DAMAGE DEALT ({exposureDamagePerSecond * Time.deltaTime:F1} HP) to {player.name}! Return to a thermal dome!");
+                        float damageThisFrame = exposureDamagePerSecond * Time.deltaTime;
+                        player.TakeDamage(damageThisFrame);
+                        Debug.LogWarning($"[CityAirlock] FOG DAMAGE DEALT ({damageThisFrame:F1} HP) to {player.name}! Remaining HP: {player.CurrentHP}/{player.MaxHP}");
                     }
                 }
             }
