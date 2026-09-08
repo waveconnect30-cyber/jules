@@ -12,12 +12,32 @@
 
 ---
 
+## 🎨 Organización de Assets 3D y Vinculación de Prefabs (`Assets/Art/`)
+
+Los modelos 3D (.fbx / .glb) y texturas del proyecto están organizados en las siguientes subcarpetas:
+
+```
+Assets/
+  Art/
+    Models/     -> Archivos 3D (.fbx, .glb) para supervivientes, reactor, murallas y monstruos
+    Textures/   -> Texturas PBR (Albedo, Normal, Roughness, Emission)
+    Prefabs/    -> Prefabs configurados con scripts y componentes de red
+```
+
+### **Vinculación Dinámica en Código (`AssetPrefabLinker.cs`):**
+- **Explorador / Clases:** El script `AssetPrefabLinker.cs` asigna dinámicamente el modelo 3D del Explorador (traje ártico, máscara de gas con visor naranja) y demás clases al `PlayerController.cs` según la clase seleccionada.
+- **Reactor:** Vincula la malla 3D industrial al script `ReactorManager.cs`.
+- **Murallas:** Vincula los tramos de muralla al script `CityWallHealthSync.cs`.
+- **Enemigos:** Vincula el modelo de cristal de hielo e ignorancia sombría a `EnemyAI.cs`.
+
+---
+
 ## 📱📱 Permisos y Soporte Multiplataforma Android
 
 1. **Manifiesto de Permisos (`Plugins/Android/AndroidManifest.xml`):**
-   - Configura permisos requeridos para multijugador y chat de voz: `INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`.
+   - Permisos para multijugador y chat de voz: `INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, `RECORD_AUDIO` y `WRITE_EXTERNAL_STORAGE`.
 2. **Gestor de Permisos Runtime (`AndroidPermissionsManager.cs`):**
-   - Comprueba y solicita permisos al iniciar la app en Android utilizando `UnityEngine.Android.Permission`. Muestra una advertencia en la UI si un permiso crítico es rechazado.
+   - Comprueba y solicita permisos al iniciar la app en Android utilizando `UnityEngine.Android.Permission`. Muestra una advertencia en UI si un permiso crítico es rechazado.
 3. **HUD Táctil Móvil (`TouchScreenHUD.cs`):**
    - Interfaz gráfica táctil con Joystick virtual para movimiento 3D y botones dinámicos para salto, interacción y habilidades.
 4. **Gestor de Calidad Gráfica (`QualitySettingsManager.cs`):**
@@ -47,10 +67,11 @@
 
 ---
 
-## 📂 Estructura del Código C# (26 Scripts)
+## 📂 Estructura del Código C# (27 Scripts)
 
 | Script | Descripción y Función Principal |
 | :--- | :--- |
+| `AssetPrefabLinker.cs` | Gestión de carpetas `Assets/Art/` (Models, Textures, Prefabs) y asignación dinámica de modelos 3D. |
 | `AndroidPermissionsManager.cs` | Gestión de permisos runtime en Android (`UnityEngine.Android.Permission`) y alerta UI. |
 | `TouchScreenHUD.cs` | UI móvil táctil con Joystick virtual y botones para salto, interacción y habilidades. |
 | `QualitySettingsManager.cs` | Optimización gráfica adaptativa para PC (60 FPS) y Android (30-60 FPS). |

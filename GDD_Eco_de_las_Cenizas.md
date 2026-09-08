@@ -12,11 +12,18 @@
 
 **Eco de las Cenizas** está diseñado desde su arquitectura base para ser **100% Cross-Play entre PC y dispositivos móviles (Android/iOS)**.
 
-### **1.1. Gestión de Permisos Android y Seguridad**
+### **1.1. Pipeline de Arte 3D y Vinculación de Prefabs (`Assets/Art/`)**
+- **Estructura de Assets:**
+  - `Assets/Art/Models/`: Modelos 3D (.fbx/.glb) para personajes, reactores, murallas y criaturas.
+  - `Assets/Art/Textures/`: Texturas PBR (Albedo, Normal, Emission).
+  - `Assets/Art/Prefabs/`: Prefabs vinculados mediante `AssetPrefabLinker.cs`.
+- **Vinculación de Modelos:** El script `AssetPrefabLinker` asigna dinámicamente el modelo 3D del Explorador (traje ártico aislante, máscara de gas con visor naranja) al `PlayerController` según la clase elegida.
+
+### **1.2. Gestión de Permisos Android y Seguridad**
 - **Manifiesto de Permisos (`Plugins/Android/AndroidManifest.xml`):** Declara permisos para comunicación en red (`INTERNET`, `ACCESS_NETWORK_STATE`), chat de voz (`RECORD_AUDIO`), almacenamiento (`WRITE_EXTERNAL_STORAGE`) y prevención de suspensión (`WAKE_LOCK`).
 - **Comprobación en Tiempo de Ejecución (`AndroidPermissionsManager`):** Comprueba y solicita permisos al iniciar la aplicación usando `UnityEngine.Android.Permission`. Muestra una alerta en UI si un permiso crítico multijugador/voz es denegado.
 
-### **1.2. HUD Táctil Móvil y Controles Adaptativos**
+### **1.3. HUD Táctil Móvil y Controles Adaptativos**
 - **Soporte Móvil (`TouchScreenHUD`):** Joystick virtual dinámico para movimiento 3D y botones táctiles dedicados para salto, interacción y habilidades.
 - **Entrada Adaptativa (`PlayerController`):** El personaje detecta y responde en tiempo real tanto a combinación de Teclado/Mouse como a toques en pantalla táctil.
 - **Optimizador de Calidad (`QualitySettingsManager`):** En Android reduce automáticamente las sombras y la distancia de renderizado a 150m para garantizar 30–60 FPS estables durante sesiones Cross-Play.
