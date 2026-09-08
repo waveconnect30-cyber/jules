@@ -1,6 +1,6 @@
-# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas
+# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas y Ruinas Mundiales
 
-¡Bienvenido al repositorio de **Eco de las Cenizas**, un videojuego multijugador PvPvE cooperativo y competitivo 3D en un mundo helado de megaciudades rivales.
+¡Bienvenido al repositorio de **Eco de las Cenizas**, un videojuego multijugador PvPvE cooperativo y competitivo 3D en un mundo helado de megaciudades rivales, ruinas mundiales y la gran Ciudad Presidencial en (0,0,0).
 
 ---
 
@@ -11,34 +11,35 @@
 
 ---
 
-## 🚀 Mecánicas PvPvE, Facciones y Comunicación
+## 🚀 Mapa Mundial, Ruinas y Atributos de Jugador
 
-1. **Facciones y Propiedad (`cityID`):**
-   - Todos los jugadores poseen una propiedad `public int cityID`.
-   - `ReactorManager.cs`, `CityWallHealthSync.cs` y `SharedInventorySync.cs` verifican el `cityID` para permitir reparaciones/depósitos aliados o bloquear interacciones enemigas.
+1. **Ciudad Presidencial Capital (0,0,0) (`WorldMapManager.cs`):**
+   - La capital mundial en el centro del mapa. Controlable mediante un asedio de 5 minutos, duplicando todas las bonificaciones de clan.
 
-2. **Sistema de Saqueo de Ciudades (`CityLootManager.cs`):**
-   - Cuando las defensas o temperatura de una ciudad caen, los jugadores de ciudades rivales pueden ejecutar un asalto (`ExecuteCityRaid`) para saquear el 25-37.5% de la Ignicita del almacén enemigo e importarla a su propia caldera.
+2. **4 Ruinas Principales y 8 Ruinas Secundarias (`RuinsNode.cs`):**
+   - **Militar Principal:** Otorga +25% de Poder de Ataque (`attackPower`).
+   - **Industrial Principal:** Otorga +30% de Velocidad de Recolección (`harvestSpeed`).
+   - **Salud Principal:** Otorga +30% de Vida Máxima (`maxHP`).
+   - **Energía Principal:** Otorga +40% de Eficiencia Térmica al Reactor.
+   - **8 Ruinas Secundarias:** Fortalezas Alpha/Beta, Talleres Este/Oeste, BioLabs Norte/Sur y Subestaciones.
 
-3. **Puntos de Control Neutrales (`TerritoryNode.cs`):**
-   - Puntos capturables en la Niebla Helada que otorgan flujo pasivo continuo de Ignicita al almacén de la ciudad controladora.
+3. **Exclusión y Esclusas de Ciudad (`CityAirlock.cs`):**
+   - Transición de la zona segura de la cúpula hacia la Niebla Helada exterior con temporizadores de exposición tóxica.
 
-4. **Diplomacia entre Facciones (`DiplomacyManager.cs`):**
-   - Registro de relaciones (Alliance, Neutral, War) entre ciudades que bloquea el fuego amigo entre aliados.
-
-5. **Chat Multicanal y Pings (`MultiChannelChat.cs`):**
-   - Canales de chat filtrados (Ciudad, Global, Alianza) y comandos tácticos rápidos de ping/voz.
-
-6. **Eventos Climáticos Globales (`GlobalEventManager.cs`):**
-   - Administrador de catástrofes como la **Súper Tormenta Helada** que acelera la caída de temperatura a -10°C/min.
+4. **Sistema Dinámico de Atributos (`PlayerStatsManager.cs`):**
+   - Calcula estadísticas efectivas en tiempo real segun el número de Ruinas capturadas por el `cityID` del jugador.
 
 ---
 
-## 📂 Estructura del Código C#
+## 📂 Estructura del Código C# (22 Scripts)
 
 | Script | Descripción y Función Principal |
 | :--- | :--- |
 | `PlayerController.cs` | Controlador 3D con `cityID`, salto, interacciones `IInteractable` y debuff de velocidad. |
+| `PlayerStatsManager.cs` | Gestión de atributos (`attackPower`, `maxHP`, `harvestSpeed`, `thermalResistance`) y bonificaciones por Ruinas. |
+| `RuinsNode.cs` | Ruinas capturables (4 Principales + 8 Secundarias) con buffs globales para la ciudad controladora. |
+| `WorldMapManager.cs` | Gestión del Mapa Mundial y asedio a la Ciudad Presidencial en (0,0,0). |
+| `CityAirlock.cs` | Transición al Mapa Mundial exterior y temporizadores de exposición a la niebla. |
 | `ReactorManager.cs` | Bucle de temperatura, consumo de Ignicita, filtrado por `cityID` y alerta a -10°C. |
 | `CityWallHealthSync.cs` | Sincronización en red de murallas por `cityID` (reparación aliada vs daño enemigo). |
 | `SharedInventorySync.cs` | Almacén global por `cityID` e interfaz de saqueo (`RaidIgnicita`). |

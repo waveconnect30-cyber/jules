@@ -1,5 +1,5 @@
 # GAME DESIGN DOCUMENT (GDD)
-# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas
+# Eco de las Cenizas - Modo PvPvE: Guerra de Calderas y Ruinas Mundiales
 
 **Género:** Multijugador PvPvE Cooperativo 3D / Guerra de Clanes / Supervivencia en Megaciudad
 **Plataforma Objetivo:** PC / Consolas de última generación (Unreal Engine 5 / Unity)
@@ -10,71 +10,62 @@
 
 ## 1. Premisa y Visión General (Modelo PvPvE Multiciudad)
 
-En un mundo consumido por un invierno cataclísmico y la **'Niebla Helada'**, múltiples megaciudades industriales rivales (*La Caldera Alpha*, *La Caldera Beta*, etc.) compiten ferozmente por los escasos yacimientos geotérmicos del planeta.
-
-### **Identificador de Facción (`cityID`)**
-Cada jugador pertenece a una megaciudad/clan representada por una variable `cityID`. Los jugadores cooperan internamente para mantener la temperatura y defensas de su propia ciudad, mientras compiten directamente en la niebla contra jugadores de ciudades enemigas (`cityID` distinto) y contra las hordas de criaturas **Sombras Heladas**.
-
-### **Condición de Victoria / Derrota y Saqueo**
-- **Derrota Compartida por Ciudad:** Si el reactor de tu ciudad se apaga o su muralla es destruida, tu ciudad entra en estado de vulnerabilidad crítica.
-- **Saqueo Enemigo (Raid/Looting):** Jugadores de ciudades enemigas pueden asaltar el almacén de tu ciudad destruida y saquear hasta un 25-37.5% de tus reservas de **Ignicita** para sumarlas a su propia caldera.
+En un mundo consumido por un invierno cataclísmico y la **'Niebla Helada'**, múltiples megaciudades industriales rivales (*La Caldera Alpha*, *La Caldera Beta*, etc.) compiten ferozmente por el control de la **Ciudad Presidencial** en el centro del mapa (0,0,0) y las **Ruinas Industriales y Militares** esparcidas por el territorio.
 
 ---
 
-## 2. Core Loop PvPvE (Bucle Principal de Juego)
+## 2. Mapa Mundial, Ruinas Centrales y Atributos de Jugador
+
+### **2.1. Ciudad Presidencial Capital (0,0,0)**
+- **Ubicación:** Centro absoluto del mapa de juego.
+- **Mecánica de Asedio (`WorldMapManager`):** Requiere sostener un asedio de 5 minutos en el perímetro central. El clan victorioso toma la capital y duplica todas las bonificaciones pasivas de sus ruinas.
+
+### **2.2. Sistema de Ruinas (`RuinsNode`)**
+El mapa contiene **4 Ruinas Principales** y **8 Ruinas Secundarias** de apoyo:
+- **Ruina Militar Principal:** Otorgar +25% Poder de Ataque (`attackPower`).
+- **Ruina Industrial Principal:** Otorgar +30% Velocidad de Recolección (`harvestSpeed`).
+- **Ruina de Salud Principal:** Otorgar +30% Vida Máxima (`maxHP`).
+- **Ruina de Energía Principal:** Otorgar +40% Eficiencia de Combustible al Reactor Central.
+- **8 Ruinas Secundarias:** Fortalezas Alpha/Beta, Talleres Este/Oeste, BioLabs Norte/Sur y Subestaciones Eléctricas.
+
+### **2.3. Esclusas de Ciudad (`CityAirlock`) y Atributos (`PlayerStatsManager`)**
+- **Esclusa de Salida:** Los jugadores cruzan la esclusa sellada de su ciudad para adentrarse en la niebla. Al salir de la cúpula térmica, se inicia el contador de exposición al frío tóxico.
+- **Gestión Dinámica de Stats:** El script `PlayerStatsManager` calcula en tiempo real `attackPower`, `maxHP`, `harvestSpeed` y `thermalResistance` según las Ruinas activas controladas por la `cityID` del jugador.
+
+---
+
+## 3. Core Loop PvPvE (Bucle Principal de Juego)
 
 ```
        +-------------------------------------------------------+
-       |   FASE 1: Exploración y Puntos de Control Neutrales   |
-       |   - Incursiones por Ignicita y combate PvPvE          |
-       |   - Captura de Nodos Geotérmicos en la Niebla (`TerritoryNode`) |
+       |   FASE 1: Salida por Esclusa y Captura de Ruinas      |
+       |   - Transición por `CityAirlock` hacia la Niebla     |
+       |   - Captura de Ruinas Principales y Secundarias      |
        +---------------------------+---------------------------+
                                    |
                                    v
        +-------------------------------------------------------+
-       |   FASE 2: Mantenimiento, Red y Saqueo (PvP Raiding)    |
-       |   - Depósito en Contenedor Global (`cityID`)           |
-       |   - Asalto/Saqueo de Almacenes Enemigos (`CityLootManager`) |
-       |   - Diplomacia y Alianzas entre Clanes (`DiplomacyManager`) |
+       |   FASE 2: Asedio a la Ciudad Presidencial (0,0,0)     |
+       |   - Batallas masivas por el control del centro (0,0,0) |
+       |   - Saqueo de Almacenes Enemigos (`CityLootManager`)   |
        +---------------------------+---------------------------+
                                    |
                                    v
        +-------------------------------------------------------+
-       |   FASE 3: Defensa Tripartita y Eventos Climatológicos |
+       |   FASE 3: Defensa, Diplomacia y Tormentas Heladas     |
        |   - Repeler Sombras Heladas y Súper Tormentas Heladas  |
-       |   - Coordinación por Chat Multicanal y Pings Tácticos |
+       |   - Chat Multicanal y Alianzas por `DiplomacyManager` |
        +-------------------------------------------------------+
 ```
 
 ---
 
-## 3. Clases Interdependientes y Facciones (`cityID`)
-
-Las 4 clases especializadas (**Ingeniero, Explorador, Científico, Táctico**) mantienen sus roles interdependientes dentro de la misma ciudad, con interacciones PvP frente a ciudades rivales:
-
-| Clase | Función Aliada (Mismo `cityID`) | Acción Competitiva PvP (Distinto `cityID`) |
-| :--- | :--- | :--- |
-| **Ingeniero** | Repara murallas y reactor de su ciudad. | Coloca torretas ofensivas para asaltar el reactor enemigo. |
-| **Explorador** | Extrae Ignicita y usa el Gancho de Agarre. | Realiza incursiones de reconocimiento y captura `TerritoryNodes` lejanos. |
-| **Científico** | Optimiza producción de invernaderos y sueros. | Neutraliza con toxinas las cúpulas de invernaderos enemigas. |
-| **Táctico** | Otorga +20% defensa en la muralla aliada. | Lidera escuadrones de asedio contra la ciudad rival. |
-
----
-
-## 4. Diplomacia, Chat Multicanal y Eventos Climáticos
-
-- **Diplomacia (`DiplomacyManager`):** Estados diplomáticos (War, Neutral, Alliance) que bloquean daño aliado.
-- **Chat Multicanal (`MultiChannelChat`):** Canales filtrados por Ciudad, Global y Alianza con pings rápidos.
-- **Eventos Globales (`GlobalEventManager`):** Eventos climatológicos como la **Súper Tormenta Helada** que afectan el servidor completo.
-
----
-
-## 5. Guion y Narrativa Ambiental (Tutorial PvPvE)
+## 4. Guion y Narrativa Ambiental (Tutorial de Ruinas y Mapa Mundial)
 
 **Personaje:** *Maelo*, el anciano operador de La Caldera Nivel 1.
 
-> *(Maelo limpia la sangre congelada de una válvula con su guante gastado)*
+> *(Maelo señala el gran mapa táctico de metal en la pared del reactor)*
 >
-> "Escúchame bien, novato. Ya no solo luchamos contra la Niebla Helada o contra esas malditas Sombras de hielo... Allá afuera hay otras Calderas, otras ciudades deseperadas con supervivientes que no dudarán en congelarnos con tal de robar nuestro mineral.
+> "Atento, novato. Allá afuera en el centro del mapa está la vieja **Ciudad Presidencial**. Quien controle esa aguja de acero dominará toda la región. Pero no podrás llegar hasta ella sin antes tomar las **Ruinas Industriales y Militares** que la rodean.
 >
-> Tu `cityID` es tu vida. Usa el **Chat de Ciudad** para coordinarte con tu clan, respeta las **Alianzas** diplomáticas y vigila los cielos cuando suene la alarma de la **Súper Tormenta Helada**. ¡Por La Caldera!"
+> Toma la **Esclusa de Salida**. Cada Ruina que nuestro clan capture aumentará la fuerza de tus armas, tu salud y la velocidad con la que extraes Ignicita. Pero ten cuidado: la niebla envenena si te alejas demasiado de los domos térmicos. ¡Cruza la puerta y reclama esas ruinas para La Caldera!"
