@@ -1,4 +1,5 @@
 using UnityEngine;
+using EcoDeLasCenizas.UI;
 
 namespace EcoDeLasCenizas.Core
 {
@@ -18,9 +19,8 @@ namespace EcoDeLasCenizas.Player
     using EcoDeLasCenizas.Core;
 
     /// <summary>
-    /// Comprehensive 3D Player Controller handling third-person locomotion, jumping,
-    /// raycast interaction with IInteractable objects, faction affiliation (cityID),
-    /// and dynamic freezing speed penalties (-20%).
+    /// Cross-platform 3D Player Controller supporting Keyboard/Mouse (PC) and Touch Screen/Virtual Joystick (Android).
+    /// Handles locomotion, jumping, raycast interactions, faction affiliation (cityID), and freezing speed debuffs (-20%).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class PlayerController : MonoBehaviour
@@ -115,8 +115,16 @@ namespace EcoDeLasCenizas.Player
 
         private void HandleLocomotion()
         {
+            // Read Keyboard/Mouse input
             float horizontal = Input.GetAxisRaw("Horizontal");
             float vertical = Input.GetAxisRaw("Vertical");
+
+            // Blend Mobile Virtual Joystick input if active
+            if (TouchScreenHUD.Instance != null && TouchScreenHUD.Instance.JoystickInput != Vector2.zero)
+            {
+                horizontal = TouchScreenHUD.Instance.JoystickInput.x;
+                vertical = TouchScreenHUD.Instance.JoystickInput.y;
+            }
 
             Vector3 direction = new Vector3(horizontal, 0f, vertical).normalized;
 
@@ -136,7 +144,9 @@ namespace EcoDeLasCenizas.Player
 
         private void HandleJump()
         {
-            if (Input.GetButtonDown("Jump") && isGrounded)
+            bool jumpInput = Input.GetButtonDown("Jump") || (TouchScreenHUD.Instance != null && TouchScreenHUD.Instance.IsJumpPressed);
+
+            if (jumpInput && isGrounded)
             {
                 velocity.y = Mathf.Sqrt(jumpHeight * -2.0f * gravity);
             }
@@ -144,7 +154,9 @@ namespace EcoDeLasCenizas.Player
 
         private void HandleInteraction()
         {
-            if (Input.GetKeyDown(KeyCode.F))
+            bool interactInput = Input.GetKeyDown(KeyCode.F) || (TouchScreenHUD.Instance != null && TouchScreenHUD.Instance.IsInteractPressed);
+
+            if (interactInput)
             {
                 Ray ray = cameraTransform
                     ? new Ray(cameraTransform.position, cameraTransform.forward)
