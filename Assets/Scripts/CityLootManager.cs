@@ -9,8 +9,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Handles city raiding and looting logic in PvPvE mode.
     /// Implements IInteractable to trigger raids via player interaction [F].
-    /// Requires target city wall HP == 0 OR critical reactor freezing before allowing raids.
-    /// Checks DiplomacyManager to prohibit raids between allied cities.
+    /// Server Command verifies physical proximity and target city vulnerability before atomic transfers.
     /// </summary>
     public class CityLootManager : NetworkBehaviour, IInteractable
     {
@@ -20,6 +19,7 @@ namespace EcoDeLasCenizas.Gameplay
         [SerializeField] private int targetCityID = 2;
         [SerializeField] private float baseRaidPercentage = 0.25f; // Steals 25% of stored Ignicita
         [SerializeField] private float raidCooldownSeconds = 60.0f;
+        [SerializeField] private float maxRaidProximityDistance = 6.0f;
 
         private float lastRaidTimestamp = -100f;
 
@@ -41,57 +41,72 @@ namespace EcoDeLasCenizas.Gameplay
         public void Interact(PlayerController player)
         {
             if (player == null) return;
+            CmdInitiateCityRaid(targetCityID);
+        }
 
-            SharedInventorySync targetWarehouse = GameManager.Instance != null ? GameManager.Instance.GetWarehouseForCity(targetCityID) : null;
-            ReactorManager targetReactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(targetCityID) : null;
+        [Command(requiresAuthority = false)]
+        public void CmdInitiateCityRaid(int targetCity, NetworkConnectionToClient senderConn = null)
+        {
+            NetworkConnectionToClient conn = senderConn ?? connectionToClient;
+            if (conn == null || conn.identity == null) return;
+
+            PlayerController raidingPlayer = conn.identity.GetComponent<PlayerController>();
+            if (raidingPlayer == null || raidingPlayer.IsDead) return;
+
+            // SERVER DISTANCE VALIDATION
+            float dist = Vector3.Distance(raidingPlayer.transform.position, transform.position);
+            if (dist > maxRaidProximityDistance)
+            {
+                Debug.LogWarning($"[CityLootManager SERVER] RAID REJECTED: Player {raidingPlayer.name} too far ({dist:F1}m > {maxRaidProximityDistance}m).");
+                return;
+            }
+
+            SharedInventorySync targetWarehouse = GameManager.Instance != null ? GameManager.Instance.GetWarehouseForCity(targetCity) : null;
+            ReactorManager targetReactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(targetCity) : null;
 
             if (targetWarehouse != null)
             {
-                ExecuteCityRaid(player, targetWarehouse, targetReactor);
+                ExecuteCityRaid(raidingPlayer, targetWarehouse, targetReactor);
             }
         }
 
         /// <summary>
-        /// Attempts to raid a target city warehouse. Triggered by a player.
-        /// Enforces Alliance treaty checks and vulnerability conditions (wall breached or reactor frozen).
+        /// Attempts to raid a target city warehouse. Triggered on Server.
         /// </summary>
         [Server]
         public void ExecuteCityRaid(PlayerController raidingPlayer, SharedInventorySync targetWarehouse, ReactorManager targetReactor)
         {
             if (raidingPlayer == null || targetWarehouse == null) return;
 
-            // Enforce Season Phase Raid Immunity (Phase 1 Settlement blocks raiding)
             if (SeasonManager.Instance != null && !SeasonManager.Instance.IsRaidAllowed())
             {
-                Debug.LogWarning("[CityLootManager SERVER] RAID BLOCKED: Raid immunity is active during Season Phase 1 (Settlement).");
+                Debug.LogWarning("[CityLootManager SERVER] RAID BLOCKED: Raid immunity active in Season Phase 1 (Settlement).");
                 return;
             }
 
             int attackerCityID = raidingPlayer.cityID;
-            int targetCityID = targetWarehouse.cityID;
+            int targetCity = targetWarehouse.cityID;
 
-            if (attackerCityID == targetCityID)
+            if (attackerCityID == targetCity)
             {
-                Debug.LogWarning($"[CityLootManager SERVER] Player in City {attackerCityID} attempted to raid their own city warehouse!");
+                Debug.LogWarning($"[CityLootManager SERVER] Player in City {attackerCityID} attempted to raid own warehouse!");
                 return;
             }
 
-            // Diplomacy Treaty Check: Block raids between Allied cities
-            if (DiplomacyManager.Instance != null && !DiplomacyManager.Instance.IsPvPAllowed(attackerCityID, targetCityID))
+            if (DiplomacyManager.Instance != null && !DiplomacyManager.Instance.IsPvPAllowed(attackerCityID, targetCity))
             {
-                Debug.LogWarning($"[CityLootManager SERVER] RAID BLOCKED: City {attackerCityID} and City {targetCityID} maintain an active Alliance treaty.");
+                Debug.LogWarning($"[CityLootManager SERVER] RAID BLOCKED: Active Alliance treaty between City {attackerCityID} and City {targetCity}.");
                 return;
             }
 
             if (Time.time < lastRaidTimestamp + raidCooldownSeconds)
             {
-                Debug.LogWarning($"[CityLootManager SERVER] Raid on City {targetCityID} is on cooldown.");
+                Debug.LogWarning($"[CityLootManager SERVER] Raid on City {targetCity} is on cooldown.");
                 return;
             }
 
-            // Vulnerability Check: Target city must have at least 1 wall breached OR reactor frozen
             bool isWallBreached = false;
-            CityWallHealthSync targetWall = GameManager.Instance != null ? GameManager.Instance.GetWallForCity(targetCityID) : null;
+            CityWallHealthSync targetWall = GameManager.Instance != null ? GameManager.Instance.GetWallForCity(targetCity) : null;
             if (targetWall != null)
             {
                 for (int i = 0; i < 4; i++)
@@ -108,7 +123,7 @@ namespace EcoDeLasCenizas.Gameplay
 
             if (!isWallBreached && !isReactorFrozen)
             {
-                Debug.LogWarning($"[CityLootManager SERVER] RAID REJECTED: City {targetCityID} is fully defended (walls intact and reactor operational).");
+                Debug.LogWarning($"[CityLootManager SERVER] RAID REJECTED: City {targetCity} defenses intact.");
                 return;
             }
 
@@ -122,10 +137,10 @@ namespace EcoDeLasCenizas.Gameplay
                 SharedInventorySync attackerWarehouse = GameManager.Instance != null ? GameManager.Instance.GetWarehouseForCity(attackerCityID) : null;
                 if (attackerWarehouse != null)
                 {
-                    attackerWarehouse.AddIgnicitaToWarehouse(stolenIgnicita, targetCityID);
+                    attackerWarehouse.AddIgnicitaToWarehouse(stolenIgnicita, targetCity);
                 }
 
-                RpcAnnounceRaidResult(attackerCityID, targetCityID, stolenIgnicita);
+                RpcAnnounceRaidResult(attackerCityID, targetCity, stolenIgnicita);
             }
         }
 

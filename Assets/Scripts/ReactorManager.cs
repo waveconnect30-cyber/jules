@@ -10,6 +10,7 @@ namespace EcoDeLasCenizas.Core
     /// <summary>
     /// Manages the Central Geothermal Reactor, Ignicita fuel consumption, city temperature decay,
     /// cityID ownership in PvPvE mode, and global penalties for freezing conditions (-10°C threshold).
+    /// Temperature decay rate accelerates when GlobalEventManager reports a Super Ice Storm active.
     /// Instances are registered by cityID in GameManager rather than using a global static singleton.
     /// </summary>
     public class ReactorManager : NetworkBehaviour
@@ -97,7 +98,11 @@ namespace EcoDeLasCenizas.Core
             }
             else
             {
-                float tempLossThisFrame = (temperatureDecayRatePerMinute / 60.0f) * deltaTime;
+                // Accelerate decay rate if GlobalEventManager Super Ice Storm is active
+                float stormMultiplier = (GlobalEventManager.Instance != null && GlobalEventManager.Instance.activeEvent == GlobalWeatherEvent.SuperIceStorm) ? 2.0f : 1.0f;
+                float effectiveDecayRate = temperatureDecayRatePerMinute * stormMultiplier;
+
+                float tempLossThisFrame = (effectiveDecayRate / 60.0f) * deltaTime;
                 currentTemperature -= tempLossThisFrame;
 
                 EvaluateTemperatureEffects();

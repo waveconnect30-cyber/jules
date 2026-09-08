@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
 using EcoDeLasCenizas.Networking;
@@ -12,10 +13,18 @@ namespace EcoDeLasCenizas.Gameplay
         OverloadWipe        // Days 13-14: Server overload event, wipe & cosmetics distribution
     }
 
+    [System.Serializable]
+    public struct ClanSeasonScore
+    {
+        public int cityID;
+        public float totalIgnicitaProcessed;
+        public int ruinsControlled;
+    }
+
     /// <summary>
     /// Controls the 14-day seasonal cycle, managing raid immunity during Settlement,
     /// Presidential City capital capture in Siege phase, Governor 5% global Ignicita tax,
-    /// and Overload Wipe end-of-season rewards.
+    /// and Overload Wipe end-of-season rewards and server state resets.
     /// Resets capital hold timer when ownership changes and triggers Governor crown as a one-shot event.
     /// </summary>
     public class SeasonManager : NetworkBehaviour
@@ -39,6 +48,9 @@ namespace EcoDeLasCenizas.Gameplay
         [SerializeField] private float requiredHoldSecondsForVictory = 10800f; // 3 hours (10,800 seconds)
         private int previousCapitalOwner = -1;
 
+        [Header("Season Leaderboard & Persistence")]
+        public readonly SyncList<ClanSeasonScore> clanLeaderboard = new SyncList<ClanSeasonScore>();
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -53,16 +65,13 @@ namespace EcoDeLasCenizas.Gameplay
         {
             if (!isServer) return;
 
-            // Advance seasonal day clock
             currentSeasonDay += Time.deltaTime / secondsPerSeasonDay;
             EvaluateSeasonPhase();
 
-            // Track Presidential Capital 3-hour hold victory during Siege Phase
             if (currentSeasonPhase == SeasonPhase.PresidentialSiege && WorldMapManager.Instance != null)
             {
                 int capitalOwner = WorldMapManager.Instance.capitalControllingCityID;
 
-                // Reset timer if ownership changed
                 if (capitalOwner != previousCapitalOwner)
                 {
                     previousCapitalOwner = capitalOwner;
@@ -123,40 +132,36 @@ namespace EcoDeLasCenizas.Gameplay
             }
         }
 
-        /// <summary>
-        /// Checks if city raiding is allowed (blocked during Day 1-3 Settlement phase).
-        /// </summary>
         public bool IsRaidAllowed()
         {
             return currentSeasonPhase != SeasonPhase.Settlement;
         }
 
-        /// <summary>
-        /// Collects 5% Governor tax on processed Ignicita and transfers it to Governor warehouse.
-        /// </summary>
         public float ApplyGovernorTax(float processedIgnicita)
         {
             if (governorCityID <= 0 || processedIgnicita <= 0f) return 0f;
 
             float taxAmount = processedIgnicita * governorTaxPercentage;
 
-            SharedInventorySync[] warehouses = FindObjectsOfType<SharedInventorySync>();
-            foreach (var wh in warehouses)
+            SharedInventorySync warehouse = GameManager.Instance != null ? GameManager.Instance.GetWarehouseForCity(governorCityID) : null;
+            if (warehouse != null)
             {
-                if (wh.cityID == governorCityID)
-                {
-                    wh.AddIgnicitaToWarehouse(taxAmount, governorCityID);
-                    Debug.Log($"[SeasonManager] 5% Governor Tax ({taxAmount:F1} Ignicita) paid to City {governorCityID}.");
-                    break;
-                }
+                warehouse.AddIgnicitaToWarehouse(taxAmount, governorCityID);
+                Debug.Log($"[SeasonManager SERVER] 5% Governor Tax ({taxAmount:F1} Ignicita) paid to City {governorCityID}.");
             }
 
             return taxAmount;
         }
 
+        [Server]
         private void TriggerEndofSeasonOverloadWipe()
         {
             Debug.LogError("[SeasonManager CRITICAL] OVERLOAD WIPE PHASE ACTIVATED! Server reset sequence initiating. Awarding seasonal cosmetics to survivors...");
+
+            // Save seasonal leaderboard scores
+            PlayerPrefs.SetInt("SeasonCompleted", 1);
+            PlayerPrefs.SetInt("LastGovernorCityID", governorCityID);
+            PlayerPrefs.Save();
 
             if (GlobalEventManager.Instance != null)
             {

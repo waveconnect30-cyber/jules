@@ -16,7 +16,7 @@
 - **Controlador Local (`PlayerController`):** Lectura de entradas de teclado/mouse y joystick táctil protegidas con comprobaciones `isLocalPlayer` / `hasAuthority`.
 - **Sincronización de Vida y Respawn:** Variable `currentHP` sincronizada vía `[SyncVar]`. Al llegar a 0 HP, la muerte se ejecuta en servidor, deshabilita temporales de entrada y reaparece al jugador en el punto de spawn de su `cityID`.
 - **Aislamiento Multi-Ciudad (`GameManager`):** Búsqueda y aislamiento de calderas, murallas y almacenes mediante registro centralizado por `cityID`.
-- **Comandos Autoritativos:** Recolección, depósito de Ignicita, reparación de murallas, habilidades de clase y votaciones del concejo procesados de forma atómica en el Servidor.
+- **Comandos Autoritativos:** Recolección, depósito de Ignicita, reparación de murallas, habilidades de clase y votaciones del concejo procesados de forma atómica en el Servidor con validaciones de distancia física e identidad.
 - **Seguridad en Chat Multicanal (`MultiChannelChat`):** Los mensajes de canal de Ciudad y Alianza son validados mediante `NetworkConnectionToClient` y distribuidos por `TargetRpc` a clientes autorizados.
 - **Registro Único de Votos del Concejo (`CouncilVotingManager`):** Cada votación registra la conexión única de jugador (`netId`) y valida la clase real en servidor, rechazando llamadas de voto duplicadas.
 - **Aislamiento de UI de Congelación (`ScreenFrostPostProcessUI`):** El efecto visual de pantalla congelada se activa únicamente si la caldera congelada coincide con la `cityID` del jugador local.
@@ -40,7 +40,7 @@
 
 ## 3. Mapa Mundial, Ruinas e Interacciones Concretas
 
-- **Ciudad Presidencial Capital (0,0,0):** Centro de la región y objetivo de la Fase 3.
+- **Ciudad Presidencial Capital (0,0,0):** Centro de la región y objetivo de la Fase 3, controlado mediante un bucle de presencia continua de miembros del clan en el área de asedio.
 - **Ruinas (4 Principales + 8 Secundarias):** Otorgan multiplicadores globales de Ataque (+25%), Cosecha (+30%), Vida (+30%) y Eficiencia Térmica (+40%).
 - **Esclusa de Ciudad (`CityAirlock`):** Puerta de enlace hacia la niebla exterior con daño HP acumulativo por exposición por jugador.
 - **Interacciones Concretas (`IInteractable`):** Nodos de recolección de Ignicita, contenedores de depósito al reactor, paneles de reparación de murallas, asalto de almacenes y asedio a la Capital.

@@ -1,12 +1,17 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Mirror;
+using EcoDeLasCenizas.Gameplay;
+using EcoDeLasCenizas.Core;
+using EcoDeLasCenizas.Player;
 
 namespace EcoDeLasCenizas.UI
 {
     /// <summary>
     /// Manages the in-game HUD for the Central Thermometer, Ignicita fuel level,
     /// freezing warnings (-10°C threshold), and Council voting UI triggers.
+    /// Dynamically binds to the connected local player's cityID rather than hardcoded static references.
     /// </summary>
     public class ReactorHUDUI : MonoBehaviour
     {
@@ -14,7 +19,7 @@ namespace EcoDeLasCenizas.UI
         [SerializeField] private TextMeshProUGUI temperatureText;
         [SerializeField] private Slider temperatureSlider;
         [SerializeField] private Image temperatureFillImage;
-        [SerializeField] private Color normalTempColor = new Color(1f, 0.5f, 0f); // Compatible with Unity 2022.3
+        [SerializeField] private Color normalTempColor = new Color(1f, 0.5f, 0f);
         [SerializeField] private Color freezingTempColor = Color.cyan;
 
         [Header("Ignicita Fuel Display")]
@@ -30,29 +35,54 @@ namespace EcoDeLasCenizas.UI
         [Header("Council UI Modal")]
         [SerializeField] private GameObject councilPanelModal;
 
+        private ReactorManager boundReactor;
+
         private void Start()
         {
-            var reactor = EcoDeLasCenizas.Gameplay.GameManager.Instance != null
-                ? EcoDeLasCenizas.Gameplay.GameManager.Instance.GetReactorForCity(1)
-                : FindObjectOfType<EcoDeLasCenizas.Core.ReactorManager>();
-
-            if (reactor != null)
-            {
-                reactor.OnTemperatureChanged.AddListener(UpdateTemperatureUI);
-                reactor.OnIgnicitaChanged.AddListener(UpdateIgnicitaUI);
-                reactor.OnGreenhouseStatusChanged.AddListener(UpdateGreenhouseUI);
-                reactor.OnPlayerMovementPenaltyChanged.AddListener(UpdateWarningUI);
-
-                // Initial setup
-                UpdateTemperatureUI(reactor.CurrentTemperature);
-                UpdateIgnicitaUI(reactor.CurrentIgnicita);
-                UpdateGreenhouseUI(reactor.IsGreenhouseActive);
-                UpdateWarningUI(reactor.IsMovementSlowed);
-            }
-
             if (councilPanelModal != null)
             {
                 councilPanelModal.SetActive(false);
+            }
+
+            BindToLocalPlayerCityReactor();
+        }
+
+        private void Update()
+        {
+            if (boundReactor == null)
+            {
+                BindToLocalPlayerCityReactor();
+            }
+        }
+
+        public void BindToLocalPlayerCityReactor()
+        {
+            var localPlayer = NetworkClient.localPlayer != null
+                ? NetworkClient.localPlayer.GetComponent<PlayerController>()
+                : FindObjectOfType<PlayerController>();
+
+            if (localPlayer != null)
+            {
+                int localCityID = localPlayer.cityID;
+                ReactorManager reactor = GameManager.Instance != null
+                    ? GameManager.Instance.GetReactorForCity(localCityID)
+                    : FindObjectOfType<ReactorManager>();
+
+                if (reactor != null && reactor != boundReactor)
+                {
+                    boundReactor = reactor;
+                    boundReactor.OnTemperatureChanged.AddListener(UpdateTemperatureUI);
+                    boundReactor.OnIgnicitaChanged.AddListener(UpdateIgnicitaUI);
+                    boundReactor.OnGreenhouseStatusChanged.AddListener(UpdateGreenhouseUI);
+                    boundReactor.OnPlayerMovementPenaltyChanged.AddListener(UpdateWarningUI);
+
+                    UpdateTemperatureUI(boundReactor.CurrentTemperature);
+                    UpdateIgnicitaUI(boundReactor.CurrentIgnicita);
+                    UpdateGreenhouseUI(boundReactor.IsGreenhouseActive);
+                    UpdateWarningUI(boundReactor.IsMovementSlowed);
+
+                    Debug.Log($"[ReactorHUDUI] Dynamically bound UI to Local Player CityID:{localCityID} Reactor.");
+                }
             }
         }
 

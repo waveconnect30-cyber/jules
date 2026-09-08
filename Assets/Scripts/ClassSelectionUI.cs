@@ -1,13 +1,18 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Mirror;
 using EcoDeLasCenizas.Gameplay;
+using EcoDeLasCenizas.Core;
+using EcoDeLasCenizas.Player;
 
 namespace EcoDeLasCenizas.UI
 {
     /// <summary>
     /// UI Manager for selecting survivor classes (Explorer, Engineer, Scientist, Tactician)
     /// before spawning into La Caldera.
+    /// Sends a server [Command] to configure character class, apply stats, bind 3D models via AssetPrefabLinker,
+    /// and enable player locomotion.
     /// </summary>
     public class ClassSelectionUI : MonoBehaviour
     {
@@ -86,7 +91,38 @@ namespace EcoDeLasCenizas.UI
                 classSelectionModalPanel.SetActive(false);
             }
 
+            var localPlayer = NetworkClient.localPlayer != null
+                ? NetworkClient.localPlayer.GetComponent<PlayerController>()
+                : FindObjectOfType<PlayerController>();
+
+            if (localPlayer != null)
+            {
+                CmdSelectClassAndSpawn(localPlayer.netIdentity, currentSelectedClass);
+            }
+
             OnClassConfirmedAndSpawned?.Invoke(currentSelectedClass);
+        }
+
+        [Command(requiresAuthority = false)]
+        private void CmdSelectClassAndSpawn(NetworkIdentity playerIdentity, CharacterClass chosenClass)
+        {
+            if (playerIdentity == null) return;
+
+            PlayerController player = playerIdentity.GetComponent<PlayerController>();
+            if (player == null) return;
+
+            Debug.Log($"[ClassSelectionUI SERVER] Configuring Player {player.name} with Class: {chosenClass}");
+
+            PlayerStatsManager stats = playerIdentity.GetComponent<PlayerStatsManager>();
+            if (stats != null)
+            {
+                stats.RecalculateEffectiveStats();
+            }
+
+            if (AssetPrefabLinker.Instance != null)
+            {
+                AssetPrefabLinker.Instance.BindClassModelToPlayer(player, chosenClass);
+            }
         }
 
         // Button Event Handlers

@@ -6,10 +6,9 @@ using EcoDeLasCenizas.Player;
 namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
-    /// Manages the World Map layout, defining the central Presidential City at (0,0,0)
-    /// and siege capture events for controlling the central megacity capital.
-    /// Implements IInteractable to allow players to initiate capital siege in Phase 3.
-    /// Unlocked exclusively during Season Phase 3 (Presidential Siege).
+    /// Manages the World Map layout, defining the central Presidential City at (0,0,0).
+    /// Runs a continuous server-side presence loop checking physical presence of clan members
+    /// within the capital radius at (0,0,0) during Season Phase 3 (Presidential Siege).
     /// </summary>
     public class WorldMapManager : NetworkBehaviour, IInteractable
     {
@@ -17,7 +16,8 @@ namespace EcoDeLasCenizas.Gameplay
 
         [Header("Presidential City Capital Settings")]
         [SerializeField] private Vector3 presidentialCityPosition = Vector3.zero;
-        [SerializeField] private float siegeDurationRequired = 300f; // 5 minutes to capture capital
+        [SerializeField] private float capitalSiegeRadius = 15.0f;
+        [SerializeField] private float siegeDurationRequired = 300f; // 5 minutes
 
         [Header("Capital City State (Synced)")]
         [SyncVar] public int capitalControllingCityID = 0; // 0 = Unclaimed
@@ -57,6 +57,34 @@ namespace EcoDeLasCenizas.Gameplay
             ProcessCapitalSiege(player.cityID, Time.deltaTime * 10f);
         }
 
+        private void Update()
+        {
+            if (!isServer) return;
+
+            // CONTINUOUS SERVER PRESENCE SIEGE LOOP
+            if (SeasonManager.Instance != null && SeasonManager.Instance.currentSeasonPhase == SeasonPhase.PresidentialSiege)
+            {
+                Collider[] hits = Physics.OverlapSphere(presidentialCityPosition, capitalSiegeRadius);
+                int dominantCityID = 0;
+                int count = 0;
+
+                foreach (var hit in hits)
+                {
+                    PlayerController p = hit.GetComponent<PlayerController>();
+                    if (p != null && !p.IsDead)
+                    {
+                        dominantCityID = p.cityID;
+                        count++;
+                    }
+                }
+
+                if (count > 0 && dominantCityID != capitalControllingCityID)
+                {
+                    ProcessCapitalSiege(dominantCityID, Time.deltaTime);
+                }
+            }
+        }
+
         /// <summary>
         /// Registers siege progress on the central Presidential City at (0,0,0).
         /// Only allowed during Season Phase 3 (Presidential Siege).
@@ -66,7 +94,6 @@ namespace EcoDeLasCenizas.Gameplay
         {
             if (SeasonManager.Instance != null && SeasonManager.Instance.currentSeasonPhase != SeasonPhase.PresidentialSiege)
             {
-                Debug.LogWarning("[WorldMapManager] CAPITAL SIEGE BLOCKED: Presidential City capture is only unlocked during Season Phase 3 (Presidential Siege).");
                 return;
             }
 
