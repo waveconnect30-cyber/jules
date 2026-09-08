@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+using Mirror;
 
 namespace EcoDeLasCenizas.Gameplay
 {
@@ -32,11 +33,11 @@ namespace EcoDeLasCenizas.Gameplay
     }
 
     /// <summary>
-    /// Manages the democratic Council voting sessions for distributing scarce community resources.
-    /// Tracks unique PlayerIDs to reject duplicate vote attempts in the same session.
-    /// Incorporates weighted class votes (e.g. Engineer x2 on infrastructure, Scientist x2 on food).
+    /// Manages democratic Council voting sessions over Mirror networking.
+    /// Uses [Command] signed player netId votes and SyncVars/RPCs to synchronize global vote counts.
+    /// Rejects duplicate votes from the same netId.
     /// </summary>
-    public class CouncilVotingManager : MonoBehaviour
+    public class CouncilVotingManager : NetworkBehaviour
     {
         public static CouncilVotingManager Instance { get; private set; }
 
@@ -59,8 +60,9 @@ namespace EcoDeLasCenizas.Gameplay
         }
 
         /// <summary>
-        /// Starts a new Council Voting Session.
+        /// Starts a new Council Voting Session on the Server.
         /// </summary>
+        [Server]
         public void StartVotingSession(string title, string description, float duration = 30f)
         {
             currentSession = new CouncilVoteSession
@@ -75,12 +77,14 @@ namespace EcoDeLasCenizas.Gameplay
             currentSession.voteTally[PolicyOption.OptionB_DefensePriority] = 0f;
             currentSession.voteTally[PolicyOption.OptionC_OverchargeReactor] = 0f;
 
-            Debug.Log($"[CouncilVotingManager] VOTING STARTED: {title}");
-            OnVotingStarted?.Invoke(currentSession);
+            Debug.Log($"[CouncilVotingManager SERVER] VOTING STARTED: {title}");
+            RpcNotifyVotingStarted(title, description, duration);
         }
 
         private void Update()
         {
+            if (!isServer) return;
+
             if (currentSession != null && currentSession.isSessionActive)
             {
                 currentSession.votingTimeRemaining -= Time.deltaTime;
@@ -92,34 +96,34 @@ namespace EcoDeLasCenizas.Gameplay
         }
 
         /// <summary>
-        /// Casts a vote weighted by character class. Rejects duplicate votes from the same playerID.
+        /// Casts a vote signed with the sender's network connection identity.
         /// </summary>
-        public void CastVote(string playerID, CharacterClass playerClass, PolicyOption chosenOption)
+        [Command(requiresAuthority = false)]
+        public void CmdCastVote(CharacterClass playerClass, PolicyOption chosenOption, NetworkConnectionToClient senderConn = null)
         {
             if (currentSession == null || !currentSession.isSessionActive)
             {
-                Debug.LogWarning("[CouncilVotingManager] Attempted to vote while no session is active.");
+                Debug.LogWarning("[CouncilVotingManager SERVER] Attempted to vote while no session is active.");
                 return;
             }
 
-            if (currentSession.votedPlayerIDs.Contains(playerID))
+            NetworkConnectionToClient conn = senderConn ?? connectionToClient;
+            string senderNetId = conn != null ? conn.connectionId.ToString() : "UnknownPlayer";
+
+            if (currentSession.votedPlayerIDs.Contains(senderNetId))
             {
-                Debug.LogWarning($"[CouncilVotingManager] DUPLICATE VOTE REJECTED: Player {playerID} has already voted in this session!");
+                Debug.LogWarning($"[CouncilVotingManager SERVER] DUPLICATE VOTE REJECTED: NetId {senderNetId} has already voted!");
                 return;
             }
 
-            currentSession.votedPlayerIDs.Add(playerID);
+            currentSession.votedPlayerIDs.Add(senderNetId);
 
             float voteWeight = GetVoteWeightForClass(playerClass, chosenOption);
             currentSession.voteTally[chosenOption] += voteWeight;
 
-            Debug.Log($"[CouncilVotingManager] Vote cast by Player {playerID} ({playerClass}) for {chosenOption} (Weight: {voteWeight}). New Total: {currentSession.voteTally[chosenOption]}");
-            OnVoteCast?.Invoke(chosenOption, currentSession.voteTally[chosenOption]);
-        }
+            Debug.Log($"[CouncilVotingManager SERVER] Vote cast by NetId {senderNetId} ({playerClass}) for {chosenOption} (Weight: {voteWeight}). New Total: {currentSession.voteTally[chosenOption]}");
 
-        public void CastVote(CharacterClass playerClass, PolicyOption chosenOption)
-        {
-            CastVote("DefaultPlayer", playerClass, chosenOption);
+            RpcNotifyVoteCast(chosenOption, currentSession.voteTally[chosenOption]);
         }
 
         /// <summary>
@@ -144,8 +148,9 @@ namespace EcoDeLasCenizas.Gameplay
         }
 
         /// <summary>
-        /// Finalizes voting and resolves winning policy.
+        /// Finalizes voting and resolves winning policy on Server.
         /// </summary>
+        [Server]
         public void EndVotingSession()
         {
             if (currentSession == null || !currentSession.isSessionActive) return;
@@ -164,32 +169,53 @@ namespace EcoDeLasCenizas.Gameplay
                 }
             }
 
-            Debug.Log($"[CouncilVotingManager] VOTING CONCLUDED. Winning Policy: {winningOption} with {highestVotes} weighted votes from {currentSession.votedPlayerIDs.Count} unique players.");
+            Debug.Log($"[CouncilVotingManager SERVER] VOTING CONCLUDED. Winning Policy: {winningOption} with {highestVotes} weighted votes.");
             ApplyPolicyEffects(winningOption);
 
-            OnVotingEnded?.Invoke(winningOption);
+            RpcNotifyVotingEnded(winningOption);
         }
 
+        [Server]
         private void ApplyPolicyEffects(PolicyOption option)
         {
             switch (option)
             {
                 case PolicyOption.OptionA_ProductionPriority:
-                    Debug.Log("[Council Policy] +50% Greenhouse Efficiency active. Wall defenses unpowered.");
+                    Debug.Log("[Council Policy SERVER] +50% Greenhouse Efficiency active. Wall defenses unpowered.");
                     break;
 
                 case PolicyOption.OptionB_DefensePriority:
-                    Debug.Log("[Council Policy] Wall Thermal Shields Activated (+30% Wall Resistance). Residential heat reduced.");
+                    Debug.Log("[Council Policy SERVER] Wall Thermal Shields Activated (+30% Wall Resistance).");
                     break;
 
                 case PolicyOption.OptionC_OverchargeReactor:
-                    Debug.Log("[Council Policy] Reactor Overcharged! +15°C Temperature surge.");
+                    Debug.Log("[Council Policy SERVER] Reactor Overcharged! +15°C Temperature surge.");
                     if (EcoDeLasCenizas.Core.ReactorManager.Instance != null)
                     {
                         EcoDeLasCenizas.Core.ReactorManager.Instance.DepositIgnicita(50f);
                     }
                     break;
             }
+        }
+
+        [ClientRpc]
+        private void RpcNotifyVotingStarted(string title, string description, float duration)
+        {
+            Debug.Log($"[CouncilVotingManager RPC] Voting Started: {title}");
+            OnVotingStarted?.Invoke(new CouncilVoteSession { proposalTitle = title, proposalDescription = description, votingTimeRemaining = duration, isSessionActive = true });
+        }
+
+        [ClientRpc]
+        private void RpcNotifyVoteCast(PolicyOption option, float totalVotes)
+        {
+            OnVoteCast?.Invoke(option, totalVotes);
+        }
+
+        [ClientRpc]
+        private void RpcNotifyVotingEnded(PolicyOption winningOption)
+        {
+            Debug.Log($"[CouncilVotingManager RPC] Voting Ended. Winner: {winningOption}");
+            OnVotingEnded?.Invoke(winningOption);
         }
     }
 }

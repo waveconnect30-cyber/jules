@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using Mirror;
 using EcoDeLasCenizas.Gameplay;
+using EcoDeLasCenizas.UI;
 
 namespace EcoDeLasCenizas.Core
 {
@@ -10,6 +11,7 @@ namespace EcoDeLasCenizas.Core
     /// Manages the Central Geothermal Reactor, Ignicita fuel consumption, city temperature decay,
     /// cityID ownership in PvPvE mode, and global penalties for freezing conditions (-10°C threshold).
     /// All temperature decay cycles and fuel updates execute strictly on [Server] and sync via SyncVars.
+    /// Remote clients run SyncVar hooks that automatically trigger ScreenFrostPostProcessUI and speed penalty events.
     /// </summary>
     public class ReactorManager : NetworkBehaviour
     {
@@ -123,9 +125,9 @@ namespace EcoDeLasCenizas.Core
         private void OnTemperatureSyncHook(float oldVal, float newVal)
         {
             OnTemperatureChanged?.Invoke(newVal);
+            EvaluateTemperatureEffects();
         }
 
-        [Server]
         private void EvaluateTemperatureEffects()
         {
             bool shouldBeFrozen = currentTemperature <= criticalTemperatureThreshold;
@@ -144,6 +146,13 @@ namespace EcoDeLasCenizas.Core
                     isMovementSlowed = true;
                     Debug.LogWarning($"[ReactorManager City:{cityID}] CRITICAL WARNING: Freezing weather reduces player movement speed by 20%.");
                     OnPlayerMovementPenaltyChanged?.Invoke(true);
+
+                    // Trigger screen frost UI overlay on client
+                    ScreenFrostPostProcessUI frostUI = FindObjectOfType<ScreenFrostPostProcessUI>();
+                    if (frostUI != null)
+                    {
+                        frostUI.SetFreezingAlertState(true);
+                    }
                 }
             }
             else
@@ -160,6 +169,12 @@ namespace EcoDeLasCenizas.Core
                     isMovementSlowed = false;
                     Debug.Log($"[ReactorManager City:{cityID}] Temperature restored. Player movement speed NORMALIZED.");
                     OnPlayerMovementPenaltyChanged?.Invoke(false);
+
+                    ScreenFrostPostProcessUI frostUI = FindObjectOfType<ScreenFrostPostProcessUI>();
+                    if (frostUI != null)
+                    {
+                        frostUI.SetFreezingAlertState(false);
+                    }
                 }
             }
 

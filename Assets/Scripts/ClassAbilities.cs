@@ -1,4 +1,5 @@
 using UnityEngine;
+using Mirror;
 using EcoDeLasCenizas.Gameplay;
 using EcoDeLasCenizas.Core;
 using EcoDeLasCenizas.UI;
@@ -6,14 +7,14 @@ using EcoDeLasCenizas.UI;
 namespace EcoDeLasCenizas.Player
 {
     /// <summary>
-    /// Executes unique active abilities for each survivor class:
+    /// Executes unique active abilities for each survivor class via server Commands:
     /// - Explorer: Geothermal Ore Scanner (highlights Ignicita nodes)
-    /// - Engineer: Automated Thermal Repair Turret
-    /// - Scientist: Catalyst Booster (doubles fuel output)
+    /// - Engineer: Automated Thermal Repair Turret (NetworkServer.Spawn)
+    /// - Scientist: Catalyst Booster (doubles fuel output via server DepositIgnicita)
     /// - Tactician: Battle Rally (+20% Defense to nearby allies)
-    /// Triggers via PC KeyCode.Q or Mobile TouchScreenHUD IsAbilityPressed signal.
+    /// Input reading restricted to local player (isLocalPlayer).
     /// </summary>
-    public class ClassAbilities : MonoBehaviour
+    public class ClassAbilities : NetworkBehaviour
     {
         [Header("Ability Settings")]
         [SerializeField] private float abilityCooldown = 15.0f;
@@ -42,12 +43,15 @@ namespace EcoDeLasCenizas.Player
                 currentCooldownTimer -= Time.deltaTime;
             }
 
-            // Check Keyboard 'Q' or Mobile Touch Ability Button
+            // INPUT RESTRICTION: Only local player checks keyboard or mobile touch inputs
+            if (!isLocalPlayer) return;
+
             bool abilityInput = Input.GetKeyDown(KeyCode.Q) || (TouchScreenHUD.Instance != null && TouchScreenHUD.Instance.IsAbilityPressed);
 
             if (abilityInput && currentCooldownTimer <= 0f)
             {
-                TriggerClassAbility();
+                currentCooldownTimer = abilityCooldown;
+                CmdExecuteAbility();
             }
         }
 
@@ -56,14 +60,17 @@ namespace EcoDeLasCenizas.Player
             abilityCooldown *= multiplier;
         }
 
-        public void TriggerClassAbility()
+        [Command]
+        public void CmdExecuteAbility()
         {
             if (playerController == null) return;
+
+            Debug.Log($"[ClassAbilities SERVER] Executing ability for Player (Class: {playerController.Class}, CityID: {playerController.cityID})");
 
             switch (playerController.Class)
             {
                 case CharacterClass.Explorer:
-                    ExecuteExplorerScanner();
+                    RpcExecuteExplorerScanner(transform.position, scanRadius);
                     break;
                 case CharacterClass.Engineer:
                     ExecuteEngineerRepairTurret();
@@ -72,17 +79,18 @@ namespace EcoDeLasCenizas.Player
                     ExecuteScientistCatalystBooster();
                     break;
                 case CharacterClass.Tactician:
-                    ExecuteTacticianBattleRally();
+                    RpcExecuteTacticianBattleRally(playerController.cityID);
                     break;
             }
-
-            currentCooldownTimer = abilityCooldown;
         }
 
-        private void ExecuteExplorerScanner()
+        [ClientRpc]
+        private void RpcExecuteExplorerScanner(Vector3 position, float radius)
         {
-            Debug.Log($"[ClassAbilities] Explorer SCANNER ACTIVATED. Scanning {scanRadius}m radius for Ignicita nodes...");
-            Collider[] hits = Physics.OverlapSphere(transform.position, scanRadius);
+            if (!isLocalPlayer) return;
+
+            Debug.Log($"[ClassAbilities CLIENT] Explorer SCANNER ACTIVATED at {position}. Scanning {radius}m radius for Ignicita nodes...");
+            Collider[] hits = Physics.OverlapSphere(position, radius);
             int nodeCount = 0;
             foreach (var hit in hits)
             {
@@ -94,27 +102,31 @@ namespace EcoDeLasCenizas.Player
             Debug.Log($"[ClassAbilities] Scanner detected {nodeCount} Ignicita mineral deposits nearby!");
         }
 
+        [Server]
         private void ExecuteEngineerRepairTurret()
         {
-            Debug.Log("[ClassAbilities] Engineer DEPLOYED AUTOMATED REPAIR TURRET.");
+            Debug.Log("[ClassAbilities SERVER] Engineer DEPLOYED AUTOMATED REPAIR TURRET.");
             if (repairTurretPrefab != null)
             {
-                Instantiate(repairTurretPrefab, transform.position + transform.forward * 2f, Quaternion.identity);
+                GameObject turret = Instantiate(repairTurretPrefab, transform.position + transform.forward * 2f, Quaternion.identity);
+                NetworkServer.Spawn(turret);
             }
         }
 
+        [Server]
         private void ExecuteScientistCatalystBooster()
         {
-            Debug.Log("[ClassAbilities] Scientist CATALYST BOOSTER ACTIVATED. Fuel efficiency doubled for 20 seconds.");
-            if (ReactorManager.Instance != null)
+            Debug.Log("[ClassAbilities SERVER] Scientist CATALYST BOOSTER ACTIVATED. Fuel efficiency doubled.");
+            if (ReactorManager.Instance != null && ReactorManager.Instance.CityID == playerController.cityID)
             {
-                ReactorManager.Instance.DepositIgnicita(30f);
+                ReactorManager.Instance.DepositIgnicita(30f, playerController.cityID);
             }
         }
 
-        private void ExecuteTacticianBattleRally()
+        [ClientRpc]
+        private void RpcExecuteTacticianBattleRally(int cityID)
         {
-            Debug.Log("[ClassAbilities] Tactician BATTLE RALLY ACTIVATED! +20% Defense buff granted to all wall defenders.");
+            Debug.Log($"[ClassAbilities RPC] Tactician BATTLE RALLY ACTIVATED! +20% Defense buff granted to City {cityID} wall defenders.");
         }
     }
 }

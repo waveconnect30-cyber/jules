@@ -7,23 +7,23 @@ using EcoDeLasCenizas.Core;
 namespace EcoDeLasCenizas.Player
 {
     /// <summary>
-    /// Cross-platform 3D Player Controller with Mirror network authority protection.
-    /// Ensures clients only read inputs and move their own local avatar.
-    /// Supports Keyboard/Mouse (PC) and Touch Screen/Virtual Joystick (Android).
+    /// Cross-platform 3D Player Controller with Mirror network authority protection, SyncVars,
+    /// server-authoritative death/respawn, and adaptive controls (PC & Android).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class PlayerController : NetworkBehaviour
     {
         [Header("Faction & City Ownership")]
         [Tooltip("ID of the city/clan this survivor belongs to in PvPvE mode.")]
-        public int cityID = 1;
+        [SyncVar] public int cityID = 1;
 
         [Header("Player Health & Health State")]
-        [SerializeField] private float currentHP = 100.0f;
-        [SerializeField] private float maxHP = 100.0f;
+        [SyncVar(hook = nameof(OnCurrentHPSyncHook))] [SerializeField] private float currentHP = 100.0f;
+        [SyncVar] [SerializeField] private float maxHP = 100.0f;
+        [SyncVar] private bool isDead = false;
 
         [Header("Class & Identity")]
-        [SerializeField] private CharacterClass characterClass = CharacterClass.Explorer;
+        [SyncVar] [SerializeField] private CharacterClass characterClass = CharacterClass.Explorer;
 
         [Header("Movement Configuration")]
         [SerializeField] private float walkSpeed = 5.0f;
@@ -37,7 +37,7 @@ namespace EcoDeLasCenizas.Player
         [SerializeField] private Transform cameraTransform;
 
         [Header("Inventory Carrying")]
-        [SerializeField] private float carriedIgnicitaAmount = 25.0f;
+        [SyncVar] [SerializeField] private float carriedIgnicitaAmount = 25.0f;
 
         // Internal State
         private CharacterController characterController;
@@ -50,6 +50,7 @@ namespace EcoDeLasCenizas.Player
         public float CarriedIgnicita => carriedIgnicitaAmount;
         public float CurrentHP => currentHP;
         public float MaxHP => maxHP;
+        public bool IsDead => isDead;
 
         private void Awake()
         {
@@ -92,7 +93,9 @@ namespace EcoDeLasCenizas.Player
 
         private void Update()
         {
-            // NETWORK AUTHORITY CHECK: Only the local controlling player processes input and locomotion
+            if (isDead) return;
+
+            // NETWORK AUTHORITY CHECK: Only local controlling player processes input and locomotion
             if (isServer || isLocalPlayer)
             {
                 HandleGroundCheck();
@@ -119,11 +122,9 @@ namespace EcoDeLasCenizas.Player
 
         private void HandleLocomotion()
         {
-            // Read Keyboard/Mouse input
             float horizontal = Input.GetAxisRaw("Horizontal");
             float vertical = Input.GetAxisRaw("Vertical");
 
-            // Blend Mobile Virtual Joystick input if active
             if (TouchScreenHUD.Instance != null && TouchScreenHUD.Instance.JoystickInput != Vector2.zero)
             {
                 horizontal = TouchScreenHUD.Instance.JoystickInput.x;
@@ -184,10 +185,60 @@ namespace EcoDeLasCenizas.Player
             characterController.Move(velocity * Time.deltaTime);
         }
 
+        [Server]
         public void TakeDamage(float damage)
         {
+            if (isDead) return;
+
             currentHP = Mathf.Max(0f, currentHP - damage);
-            Debug.LogWarning($"[PlayerController] {name} took {damage} HP damage. Remaining HP: {currentHP}/{maxHP}");
+            Debug.LogWarning($"[PlayerController SERVER] {name} took {damage} HP damage. Remaining: {currentHP}/{maxHP}");
+
+            if (currentHP <= 0f)
+            {
+                DieAndRespawn();
+            }
+        }
+
+        [Server]
+        private void DieAndRespawn()
+        {
+            isDead = true;
+            Debug.LogError($"[PlayerController SERVER] PLAYER DIED: {name} (CityID:{cityID}). Initiating respawn timer...");
+            RpcOnPlayerDeath();
+
+            Invoke(nameof(RespawnAtCitySpawnPoint), 5.0f);
+        }
+
+        [Server]
+        private void RespawnAtCitySpawnPoint()
+        {
+            currentHP = maxHP;
+            isDead = false;
+
+            // Teleport to spawn point (or origin)
+            transform.position = new Vector3(cityID * 10f, 0f, 0f);
+            Debug.Log($"[PlayerController SERVER] PLAYER RESPAWNED: {name} (CityID:{cityID}) at {transform.position}");
+            RpcOnPlayerRespawn(transform.position);
+        }
+
+        [ClientRpc]
+        private void RpcOnPlayerDeath()
+        {
+            if (characterController != null) characterController.enabled = false;
+            Debug.LogWarning($"[PlayerController CLIENT] Local Player Dead. Control disabled.");
+        }
+
+        [ClientRpc]
+        private void RpcOnPlayerRespawn(Vector3 spawnPos)
+        {
+            transform.position = spawnPos;
+            if (characterController != null) characterController.enabled = true;
+            Debug.Log($"[PlayerController CLIENT] Local Player Respawned. Control re-enabled.");
+        }
+
+        private void OnCurrentHPSyncHook(float oldVal, float newVal)
+        {
+            Debug.Log($"[PlayerController SyncVar] HP synced: {newVal}/{maxHP}");
         }
 
         public void ConsumeCarriedIgnicita(float amount)

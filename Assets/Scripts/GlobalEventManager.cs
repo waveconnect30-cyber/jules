@@ -16,6 +16,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Manages server-wide climate events, such as the 'Super Ice Storm' which accelerates
     /// temperature decay across all city reactors to -10°C/min and doubles ability cooldowns.
+    /// Event state is fully synchronized across all clients via [SyncVar].
     /// </summary>
     public class GlobalEventManager : NetworkBehaviour
     {
@@ -84,6 +85,7 @@ namespace EcoDeLasCenizas.Gameplay
             RpcAnnounceEventEnded();
         }
 
+        [Server]
         private void ApplySuperIceStormEffects(bool active)
         {
             float cooldownMultiplier = active ? 2.0f : 0.5f;
@@ -94,14 +96,14 @@ namespace EcoDeLasCenizas.Gameplay
                 if (ab != null)
                 {
                     ab.ModifyCooldown(cooldownMultiplier);
-                    Debug.LogWarning($"[GlobalEventManager] Player ability cooldowns modified x{cooldownMultiplier} for Super Ice Storm.");
+                    Debug.LogWarning($"[GlobalEventManager SERVER] Player ability cooldowns modified x{cooldownMultiplier} for Super Ice Storm.");
                 }
             }
         }
 
         private void OnCurrentEventChanged(GlobalWeatherEvent oldEvt, GlobalWeatherEvent newEvt)
         {
-            Debug.Log($"[GlobalEventManager CLIENT] Climate Event changed to: {newEvt}");
+            Debug.Log($"[GlobalEventManager CLIENT SyncVar] Climate Event updated: {newEvt}");
         }
 
         [ClientRpc]

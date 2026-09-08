@@ -8,8 +8,8 @@ namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
     /// Handles city raiding and looting logic in PvPvE mode.
-    /// When an enemy city's reactor or wall HP reaches 0, hostile players can trigger a raid
-    /// to siphon a percentage of Ignicita from the target warehouse into their own city warehouse.
+    /// Requires target city wall HP == 0 OR critical reactor freezing before allowing raids.
+    /// Checks DiplomacyManager to prohibit raids between allied cities.
     /// </summary>
     public class CityLootManager : NetworkBehaviour
     {
@@ -33,6 +33,7 @@ namespace EcoDeLasCenizas.Gameplay
 
         /// <summary>
         /// Attempts to raid a target city warehouse. Triggered by a player.
+        /// Enforces Alliance treaty checks and vulnerability conditions (wall breached or reactor frozen).
         /// </summary>
         [Server]
         public void ExecuteCityRaid(PlayerController raidingPlayer, SharedInventorySync targetWarehouse, ReactorManager targetReactor)
@@ -42,7 +43,7 @@ namespace EcoDeLasCenizas.Gameplay
             // Enforce Season Phase Raid Immunity (Phase 1 Settlement blocks raiding)
             if (SeasonManager.Instance != null && !SeasonManager.Instance.IsRaidAllowed())
             {
-                Debug.LogWarning("[CityLootManager] RAID BLOCKED: Raid immunity is active during Season Phase 1 (Settlement).");
+                Debug.LogWarning("[CityLootManager SERVER] RAID BLOCKED: Raid immunity is active during Season Phase 1 (Settlement).");
                 return;
             }
 
@@ -51,27 +52,53 @@ namespace EcoDeLasCenizas.Gameplay
 
             if (attackerCityID == targetCityID)
             {
-                Debug.LogWarning($"[CityLootManager] Player in City {attackerCityID} attempted to raid their own city warehouse!");
+                Debug.LogWarning($"[CityLootManager SERVER] Player in City {attackerCityID} attempted to raid their own city warehouse!");
+                return;
+            }
+
+            // Diplomacy Treaty Check: Block raids between Allied cities
+            if (DiplomacyManager.Instance != null && !DiplomacyManager.Instance.IsPvPAllowed(attackerCityID, targetCityID))
+            {
+                Debug.LogWarning($"[CityLootManager SERVER] RAID BLOCKED: City {attackerCityID} and City {targetCityID} maintain an active Alliance treaty.");
                 return;
             }
 
             if (Time.time < lastRaidTimestamp + raidCooldownSeconds)
             {
-                Debug.LogWarning($"[CityLootManager] Raid on City {targetCityID} is on cooldown.");
+                Debug.LogWarning($"[CityLootManager SERVER] Raid on City {targetCityID} is on cooldown.");
                 return;
             }
 
-            // Check if city is vulnerable (reactor out of fuel or temp critically low)
-            bool isVulnerable = (targetReactor != null && targetReactor.CurrentTemperature <= -10f);
+            // Vulnerability Check: Target city must have at least 1 wall breached OR reactor frozen
+            bool isWallBreached = false;
+            CityWallHealthSync targetWall = FindCityWall(targetCityID);
+            if (targetWall != null)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    if (targetWall.GetWallStatus((WallSection)i).currentHP <= 0f)
+                    {
+                        isWallBreached = true;
+                        break;
+                    }
+                }
+            }
 
-            float actualRaidPct = isVulnerable ? baseRaidPercentage * 1.5f : baseRaidPercentage;
+            bool isReactorFrozen = (targetReactor != null && targetReactor.CurrentTemperature <= -10f);
+
+            if (!isWallBreached && !isReactorFrozen)
+            {
+                Debug.LogWarning($"[CityLootManager SERVER] RAID REJECTED: City {targetCityID} is fully defended (walls intact and reactor operational).");
+                return;
+            }
+
+            float actualRaidPct = isReactorFrozen ? baseRaidPercentage * 1.5f : baseRaidPercentage;
             float stolenIgnicita = targetWarehouse.RaidIgnicita(actualRaidPct);
 
             if (stolenIgnicita > 0f)
             {
                 lastRaidTimestamp = Time.time;
 
-                // Find attacker's warehouse and credit the stolen Ignicita
                 SharedInventorySync[] warehouses = FindObjectsOfType<SharedInventorySync>();
                 foreach (var wh in warehouses)
                 {
@@ -84,6 +111,16 @@ namespace EcoDeLasCenizas.Gameplay
 
                 RpcAnnounceRaidResult(attackerCityID, targetCityID, stolenIgnicita);
             }
+        }
+
+        private CityWallHealthSync FindCityWall(int cID)
+        {
+            CityWallHealthSync[] walls = FindObjectsOfType<CityWallHealthSync>();
+            foreach (var w in walls)
+            {
+                if (w.cityID == cID) return w;
+            }
+            return null;
         }
 
         [ClientRpc]

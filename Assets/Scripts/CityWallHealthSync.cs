@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using Mirror;
+using EcoDeLasCenizas.Gameplay;
 
 namespace EcoDeLasCenizas.Networking
 {
@@ -23,8 +24,9 @@ namespace EcoDeLasCenizas.Networking
     }
 
     /// <summary>
-    /// Synchronizes the HP of 4 city wall sections per cityID across all multiplayer clients in PvPvE mode.
-    /// Allows repairs by same-city survivors and attacks/damage by enemy city players or AI.
+    /// Synchronizes the HP of 4 city wall sections per cityID across all multiplayer clients.
+    /// Respects DiplomacyManager alliance treaties to prohibit friendly fire damage.
+    /// Dedicated Server Compatible: Triggers server-side phase transitions directly on breach.
     /// </summary>
     public class CityWallHealthSync : NetworkBehaviour
     {
@@ -92,7 +94,8 @@ namespace EcoDeLasCenizas.Networking
         }
 
         /// <summary>
-        /// Applies damage to a specific wall section. Accepts damage from hostile cityIDs or AI (-1).
+        /// Applies damage to a specific wall section.
+        /// Checks DiplomacyManager to prohibit damage from Allied cityIDs.
         /// </summary>
         [Server]
         public void DamageWall(WallSection section, float damageAmount, int attackerCityID = -1)
@@ -101,6 +104,16 @@ namespace EcoDeLasCenizas.Networking
             {
                 Debug.LogWarning($"[CityWallHealthSync City:{cityID}] Prevented friendly fire damage from player in City {attackerCityID}.");
                 return;
+            }
+
+            // Check Diplomacy Alliance Treaty
+            if (attackerCityID > 0 && DiplomacyManager.Instance != null)
+            {
+                if (!DiplomacyManager.Instance.IsPvPAllowed(attackerCityID, cityID))
+                {
+                    Debug.LogWarning($"[CityWallHealthSync SERVER] DAMAGE BLOCKED: City {attackerCityID} and City {cityID} maintain an active Alliance treaty.");
+                    return;
+                }
             }
 
             int index = (int)section;
@@ -114,6 +127,14 @@ namespace EcoDeLasCenizas.Networking
 
             if (status.currentHP <= 0f)
             {
+                Debug.LogError($"[CityWallHealthSync SERVER] Wall {section} breached! Triggering Siege Phase on Dedicated Server.");
+
+                // DEDICATED SERVER SUPPORT: Trigger phase transition directly on Server
+                if (GameManager.Instance != null && GameManager.Instance.CurrentPhase == GamePhase.ExpeditionPhase)
+                {
+                    GameManager.Instance.TransitionToPhase(GamePhase.SiegePhase);
+                }
+
                 RpcNotifyWallBreached(section);
             }
         }
