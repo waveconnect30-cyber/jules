@@ -35,13 +35,14 @@ Cada jugador pertenece a una megaciudad/clan representada por una variable `city
        |   FASE 2: Mantenimiento, Red y Saqueo (PvP Raiding)    |
        |   - Depósito en Contenedor Global (`cityID`)           |
        |   - Asalto/Saqueo de Almacenes Enemigos (`CityLootManager`) |
+       |   - Diplomacia y Alianzas entre Clanes (`DiplomacyManager`) |
        +---------------------------+---------------------------+
                                    |
                                    v
        +-------------------------------------------------------+
-       |   FASE 3: Defensa Tripartita y Asedio                 |
-       |   - Repeler Sombras Heladas y Jugadores Invasores      |
-       |   - Reparación de Murallas propias vs Ataques a Rivales |
+       |   FASE 3: Defensa Tripartita y Eventos Climatológicos |
+       |   - Repeler Sombras Heladas y Súper Tormentas Heladas  |
+       |   - Coordinación por Chat Multicanal y Pings Tácticos |
        +-------------------------------------------------------+
 ```
 
@@ -60,11 +61,11 @@ Las 4 clases especializadas (**Ingeniero, Explorador, Científico, Táctico**) m
 
 ---
 
-## 4. Sistema de Nodos Territoriales Neutrales (`TerritoryNode`)
+## 4. Diplomacia, Chat Multicanal y Eventos Climáticos
 
-Esparcidos por la Niebla Helada existen **Nodos Geotérmicos Neutrales**.
-- **Mecánica de Captura:** Mantener presencia en el radio del nodo durante 10 segundos.
-- **Beneficio de Clan:** Una vez capturado por una `cityID`, genera un flujo pasivo continuo de +2.0 unidades de Ignicita/segundo directamente al almacén global de esa ciudad.
+- **Diplomacia (`DiplomacyManager`):** Estados diplomáticos (War, Neutral, Alliance) que bloquean daño aliado.
+- **Chat Multicanal (`MultiChannelChat`):** Canales filtrados por Ciudad, Global y Alianza con pings rápidos.
+- **Eventos Globales (`GlobalEventManager`):** Eventos climatológicos como la **Súper Tormenta Helada** que afectan el servidor completo.
 
 ---
 
@@ -76,6 +77,4 @@ Esparcidos por la Niebla Helada existen **Nodos Geotérmicos Neutrales**.
 >
 > "Escúchame bien, novato. Ya no solo luchamos contra la Niebla Helada o contra esas malditas Sombras de hielo... Allá afuera hay otras Calderas, otras ciudades deseperadas con supervivientes que no dudarán en congelarnos con tal de robar nuestro mineral.
 >
-> Tu `cityID` es tu vida. Si ves a alguien con una marca de caldera distinta en el casco, no es tu amigo: viene a por nuestra **Ignicita**. Si dejan caer nuestra muralla, saquearán nuestros almacenes hasta dejarnos en cero.
->
-> Mantén caliente nuestro reactor, defiende nuestro muro y si ves un **Nodo Geotérmico** en la niebla, tómalo para nuestro clan antes de que ellos lo hagan. ¡Por La Caldera!"
+> Tu `cityID` es tu vida. Usa el **Chat de Ciudad** para coordinarte con tu clan, respeta las **Alianzas** diplomáticas y vigila los cielos cuando suene la alarma de la **Súper Tormenta Helada**. ¡Por La Caldera!"

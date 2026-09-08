@@ -11,7 +11,7 @@
 
 ---
 
-## 🚀 Nuevas Mecánicas PvPvE e Integración de Facciones (`cityID`)
+## 🚀 Mecánicas PvPvE, Facciones y Comunicación
 
 1. **Facciones y Propiedad (`cityID`):**
    - Todos los jugadores poseen una propiedad `public int cityID`.
@@ -22,6 +22,15 @@
 
 3. **Puntos de Control Neutrales (`TerritoryNode.cs`):**
    - Puntos capturables en la Niebla Helada que otorgan flujo pasivo continuo de Ignicita al almacén de la ciudad controladora.
+
+4. **Diplomacia entre Facciones (`DiplomacyManager.cs`):**
+   - Registro de relaciones (Alliance, Neutral, War) entre ciudades que bloquea el fuego amigo entre aliados.
+
+5. **Chat Multicanal y Pings (`MultiChannelChat.cs`):**
+   - Canales de chat filtrados (Ciudad, Global, Alianza) y comandos tácticos rápidos de ping/voz.
+
+6. **Eventos Climáticos Globales (`GlobalEventManager.cs`):**
+   - Administrador de catástrofes como la **Súper Tormenta Helada** que acelera la caída de temperatura a -10°C/min.
 
 ---
 
@@ -35,6 +44,9 @@
 | `SharedInventorySync.cs` | Almacén global por `cityID` e interfaz de saqueo (`RaidIgnicita`). |
 | `CityLootManager.cs` | Sistema de asalto y robo de recursos entre ciudades rivales. |
 | `TerritoryNode.cs` | Nodos neutrales capturables que generan Ignicita pasiva para la `cityID` dominante. |
+| `DiplomacyManager.cs` | Sistema diplomático (Alliance, Neutral, War) entre facciones. |
+| `MultiChannelChat.cs` | Chat multicanal (Ciudad, Global, Alianza) y pings tácticos rápidos. |
+| `GlobalEventManager.cs` | Gestión de eventos climáticos globales (Súper Tormenta Helada). |
 | `PlayerCharacterController.cs` | Movimiento en 3a persona, gancho de agarre del Explorador y debuff de velocidad. |
 | `ClassAbilities.cs` | Habilidades únicas (Escáner de mineral, torreta de reparación, etc.). |
 | `ReactorHUDUI.cs` | UI del termómetro central, barra de Ignicita e indicador de invernaderos. |
