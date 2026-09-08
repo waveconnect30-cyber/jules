@@ -122,11 +122,20 @@ namespace EcoDeLasCenizas.Editor
 
             SetSerializedObjectReferenceProperty(lobby, "transport", kcpTransport);
 
-            // Assign Player Prefab to NetworkManager
+            // Assign Player Prefab & Spawnable Prefabs to NetworkManager
             GameObject playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/PlayerPrefab.prefab");
-            if (playerPrefab != null && lobby != null)
+            GameObject reactorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/ReactorPrefab.prefab");
+            GameObject wallPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/CityWallPrefab.prefab");
+            GameObject nodePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/ResourceNodePrefab.prefab");
+
+            if (lobby != null)
             {
-                lobby.playerPrefab = playerPrefab;
+                if (playerPrefab != null) lobby.playerPrefab = playerPrefab;
+
+                if (lobby.spawnPrefabs == null) lobby.spawnPrefabs = new List<GameObject>();
+                if (reactorPrefab != null && !lobby.spawnPrefabs.Contains(reactorPrefab)) lobby.spawnPrefabs.Add(reactorPrefab);
+                if (wallPrefab != null && !lobby.spawnPrefabs.Contains(wallPrefab)) lobby.spawnPrefabs.Add(wallPrefab);
+                if (nodePrefab != null && !lobby.spawnPrefabs.Contains(nodePrefab)) lobby.spawnPrefabs.Add(nodePrefab);
             }
 
             // Create GameManager & Core Systems (including AssetPrefabLinker)

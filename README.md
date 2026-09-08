@@ -5,7 +5,7 @@
 ---
 
 ## 📌 Referencia de Entrega
-**CODEX-957AFB5-TRASPASO-LOCAL**
+**CODEX-UNITY-6000-5-10F1**
 
 ---
 
@@ -14,18 +14,33 @@
 - 📖 **Game Design Document (GDD PvPvE):** [`GDD_Eco_de_las_Cenizas.md`](./GDD_Eco_de_las_Cenizas.md)
 - 📊 **Especificaciones Técnicas:** [`docs/Technical_Specifications.md`](./docs/Technical_Specifications.md)
 - ⚙️ **Dependencias Unity (Packages):** [`Packages/manifest.json`](./Packages/manifest.json)
-- ⚙️ **Versión de Unity Editor:** [`ProjectSettings/ProjectVersion.txt`](./ProjectSettings/ProjectVersion.txt) (`2022.3.10f1`)
+- ⚙️ **Versión de Unity Editor:** [`ProjectSettings/ProjectVersion.txt`](./ProjectSettings/ProjectVersion.txt) (`6000.5.10f1`)
 - 🤖 **Manifiesto de Permisos Android:** [`Assets/Plugins/Android/AndroidManifest.xml`](./Assets/Plugins/Android/AndroidManifest.xml)
 - 🛠️ **Generador de Escena y Prefabs:** [`Assets/Editor/BuildTestSceneAndPrefabs.cs`](./Assets/Editor/BuildTestSceneAndPrefabs.cs)
 - 🎮 **Escena de Prueba Multijugador:** [`Assets/Scenes/TestScene.unity`](./Assets/Scenes/TestScene.unity)
 
 ---
 
-## 🛠️ Generador de Escena, Prefabs y HUD en Unity 2022.3 LTS
+## 🚀 Migración a Unity 6 (6000.5.10f1) y Paquetes Oficiales
+
+1. **Versión del Editor:**
+   - Se ha fijado `m_EditorVersion: 6000.5.10f1` en `ProjectSettings/ProjectVersion.txt`.
+2. **Distribución de Red Mirror 96.11.2:**
+   - La dependencia Git UPM de Mirror que causaba conflictos fue eliminada de `Packages/manifest.json`.
+   - Se utiliza la importación limpia y oficial de **Mirror 96.11.2** alojada directamente en `Assets/Mirror`.
+3. **Versiones de Paquetes en UPM (`Packages/manifest.json`):**
+   - Universal Render Pipeline (URP): `com.unity.render-pipelines.universal` -> `17.0.3`
+   - Input System: `com.unity.inputsystem` -> `1.13.0`
+   - uGUI: `com.unity.ugui` -> `2.0.0`
+   - TextMeshPro: `com.unity.textmeshpro` -> `3.0.7`
+
+---
+
+## 🛠️ Generador de Escena, Prefabs y HUD en Unity 6 (6000.5.10f1)
 
 Para generar la escena, los prefabs y el HUD de Canvas real con componentes nativos de Unity y Mirror Networking:
 
-1. Abre el proyecto en **Unity 2022.3 LTS**.
+1. Abre el proyecto en **Unity 6000.5.10f1**.
 2. En la barra de menú superior, selecciona:
    `EcoDeLasCenizas -> Build Real Test Scene and Prefabs`
 3. Se generarán automáticamente:
@@ -38,7 +53,7 @@ Para generar la escena, los prefabs y el HUD de Canvas real con componentes nati
 
 ---
 
-## 🔒 Configuración de Red, Transmisión Serializada y Defectos Documentados
+## 🔒 Configuración de Red y Transmisión Serializada
 
 1. **Configuración por SerializedProperty (`BuildTestSceneAndPrefabs.cs`):**
    - Asigna campos privados/protegidos (`cityID`, `targetCityID`) en `ReactorManager`, `CityWallHealthSync`, `SharedInventorySync`, `ReactorDepositContainer` y `CityWallRepairPanel` para Ciudad 1 (`cityID = 1`, `targetCityID = 1`) y Ciudad 2 (`cityID = 2`, `targetCityID = 2`).
@@ -48,18 +63,13 @@ Para generar la escena, los prefabs y el HUD de Canvas real con componentes nati
 2. **Gestión de Delegates en Servidor (`GameManager.cs`):**
    - Mantiene un diccionario privado de handlers explícitos (`reactorFreezeHandlers`) para desuscribir eventos específicos de `OnCityFrozenSolid` al reconstruir los registros multi-ciudad sin usar llamadas globales destructivas.
 
-3. **Estado de DefeatedCityIDs:**
-   - `defeatedCityIDs` es un `HashSet<int>` local del Servidor. Registra y anuncia la caída de calderas individuales (`RpcNotifyCityDefeated`).
-   - *Nota de Traspaso:* La restricción física de movimiento/respawn tras la derrota de ciudad será conectada en las pruebas locales al vincular los bloqueos de entrada en `PlayerController`.
-
 ---
 
-## 📝 Lista Honesta de Pendientes para Ejecución Local en Unity Editor
+## 📝 Lista Honesta de Pendientes para Ejecución Local en Unity 6 Editor
 
-1. **Compilación C# y Weaver de Mirror en Unity Editor:** Se realizaron validaciones de sintaxis y estructura mediante scripts. La compilación de bytecode IL y el tejido Weaver de Mirror se deben ejecutar al abrir Unity 2022.3 LTS localmente.
-2. **Ejecución del MenuItem Generador:** Ejecutar el ícono de menú `EcoDeLasCenizas -> Build Real Test Scene and Prefabs` en el Editor para instanciar y guardar la escena `TestScene.unity` con los GUIDs y metaarchivos `.meta` de Unity.
-3. **Ajustes Visuales del HUD:** Ajustar posiciones finales en Canvas Layout RectTransforms del Inspector para las etiquetas TextMeshPro.
-4. **Pruebas Host/Cliente de 2 Procesos:** Ejecutar dos instancias (Host y Cliente remoto) en ejecutables `.exe` o mediante el Editor ParrelSync para verificar las interacciones de distancia y depósitos atómicos.
+1. **Compilación C#, Weaver y Play Mode:** Se ejecutaron verificaciones sintácticas e integrales de estructura en los scripts C#. La compilación de bytecode IL, el pase de tejido Mirror Weaver y la prueba de Play Mode / ejecutable quedan pendientes de ejecución en el entorno local de Unity 6000.5.10f1.
+2. **Invocación del MenuItem Generador:** Invocar `EcoDeLasCenizas -> Build Real Test Scene and Prefabs` en el Editor de Unity 6 para instanciar `Assets/Scenes/TestScene.unity` y los prefabs con sus correspondientes archivos `.meta`.
+3. **Pruebas de Conexión de 2 Procesos:** Probar conectividad Host y Cliente remoto en PC/Android o via ParrelSync.
 
 ---
 

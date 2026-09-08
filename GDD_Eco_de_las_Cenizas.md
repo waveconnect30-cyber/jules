@@ -1,10 +1,10 @@
 # GAME DESIGN DOCUMENT (GDD)
 # Eco de las Cenizas - Modo PvPvE Cross-Play (PC y Android)
 
-**Referencia de Entrega:** `CODEX-5AC805E-GENERADOR-COMPLETO`
+**Referencia de Entrega:** `CODEX-UNITY-6000-5-10F1`
 **Género:** Multijugador PvPvE Cooperativo y Competitivo 3D / Guerra de Clanes / Supervivencia Cross-Play
 **Plataforma Objetivo:** PC Windows / Android (.apk / .aab) / iOS / Consolas de última generación
-**Motor Gráfico:** Unity 2022.3 LTS (URP - Universal Render Pipeline) / Mirror Networking
+**Motor Gráfico:** Unity 6 (6000.5.10f1) URP - Universal Render Pipeline / Mirror Networking (96.11.2)
 **Perspectiva:** Tercera Persona 3D (Acción, Supervivencia y Gestión de Megaciudad Vertical)
 **Público Objetivo:** Jugadores de supervivencia cooperativa y estrategia multijugador (*Rust*, *Helldivers 2*, *Frostpunk*, *Division 2 Dark Zone*).
 
@@ -59,7 +59,7 @@ El juego se estructura en un ciclo dinámico continuo de 3 fases interconectadas
 
 ## 3. CLASES INTERDEPENDIENTES Y MATRIZ DE FALLA EN CASCADA
 
-Ningún jugador puede sobrevivir solo. Las 4 clases son estrictamente complementarias y la caída de una genera una reacción en cadena que destruye a la comunidad:
+Ningún jugador puede sobrevivir solo. Las 4 clases son strictly complementarias y la caída de una genera una reacción en cadena que destruye a la comunidad:
 
 | Clase | Rol Principal | Habilidad Clave (Tecla Q / Botón Móvil) |
 | :--- | :--- | :--- |

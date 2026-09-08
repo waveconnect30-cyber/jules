@@ -1,11 +1,10 @@
 {
   "dependencies": {
-    "com.vis2k.mirror": "https://github.com/vis2k/Mirror.git?path=/Assets/Mirror",
     "com.unity.feature.2d": "2.0.0",
-    "com.unity.inputsystem": "1.7.0",
-    "com.unity.render-pipelines.universal": "14.0.10",
-    "com.unity.textmeshpro": "3.0.6",
-    "com.unity.ugui": "1.0.0",
+    "com.unity.inputsystem": "1.13.0",
+    "com.unity.render-pipelines.universal": "17.0.3",
+    "com.unity.textmeshpro": "3.0.7",
+    "com.unity.ugui": "2.0.0",
     "com.unity.modules.ai": "1.0.0",
     "com.unity.modules.animation": "1.0.0",
     "com.unity.modules.audio": "1.0.0",
