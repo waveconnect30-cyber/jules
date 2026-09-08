@@ -8,8 +8,8 @@ namespace EcoDeLasCenizas.Gameplay
 {
     /// <summary>
     /// Server-authoritative IInteractable wall repair station.
-    /// Validates interaction distance on Server, verifies and deducts warehouse Steel/Ignicita,
-    /// and restores wall section HP.
+    /// Resolves target wall and verifies section HP < maxHP BEFORE deducting Steel from warehouse,
+    /// preserving warehouse resources if repair is invalid or wall is intact.
     /// </summary>
     public class CityWallRepairPanel : NetworkBehaviour, IInteractable
     {
@@ -45,15 +45,30 @@ namespace EcoDeLasCenizas.Gameplay
                 return;
             }
 
-            // SERVER DISTANCE VALIDATION
+            // 1. SERVER DISTANCE VALIDATION
             float dist = Vector3.Distance(player.transform.position, transform.position);
             if (dist > maxInteractionDistance)
             {
-                Debug.LogWarning($"[CityWallRepairPanel SERVER] REJECTED repair from {player.name}: Distance too far ({dist:F1}m > {maxInteractionDistance}m).");
+                Debug.LogWarning($"[CityWallRepairPanel SERVER] REJECTED repair from {player.name}: Distance too far ({dist:F1}m > {maxInteractionDistance}m). Materials preserved.");
                 return;
             }
 
-            // WAREHOUSE MATERIAL CHECK & DEDUCTION
+            // 2. RESOLVE WALL TARGET AND VERIFY NEED FOR REPAIR BEFORE CHARGING STEEL
+            CityWallHealthSync wall = GameManager.Instance != null ? GameManager.Instance.GetWallForCity(targetCityID) : FindObjectOfType<CityWallHealthSync>();
+            if (wall == null)
+            {
+                Debug.LogWarning($"[CityWallRepairPanel SERVER] REJECTED repair: Wall for City {targetCityID} not found. Materials preserved.");
+                return;
+            }
+
+            WallStatus wallStatus = wall.GetWallStatus(sectionToRepair);
+            if (wallStatus.currentHP >= wallStatus.maxHP)
+            {
+                Debug.LogWarning($"[CityWallRepairPanel SERVER] REJECTED repair: Section {sectionToRepair} is already at max HP ({wallStatus.currentHP}/{wallStatus.maxHP}). Materials preserved.");
+                return;
+            }
+
+            // 3. WAREHOUSE MATERIAL CHECK AND DEDUCTION ONLY AFTER WALL VALIDATION
             SharedInventorySync warehouse = GameManager.Instance != null ? GameManager.Instance.GetWarehouseForCity(targetCityID) : FindObjectOfType<SharedInventorySync>();
             if (warehouse == null || !warehouse.ConsumeSteelFromWarehouse(requiredSteelCost, targetCityID))
             {
@@ -61,13 +76,9 @@ namespace EcoDeLasCenizas.Gameplay
                 return;
             }
 
-            // REPAIR WALL
-            CityWallHealthSync wall = GameManager.Instance != null ? GameManager.Instance.GetWallForCity(targetCityID) : FindObjectOfType<CityWallHealthSync>();
-            if (wall != null)
-            {
-                wall.RepairWall(sectionToRepair, repairHPBonus, targetCityID);
-                Debug.Log($"[CityWallRepairPanel SERVER] WALL REPAIRED: Section {sectionToRepair} +{repairHPBonus} HP on City {targetCityID}. Consumed {requiredSteelCost} Steel.");
-            }
+            // 4. APPLY REPAIR
+            wall.RepairWall(sectionToRepair, repairHPBonus, targetCityID);
+            Debug.Log($"[CityWallRepairPanel SERVER] WALL REPAIRED: Section {sectionToRepair} +{repairHPBonus} HP on City {targetCityID}. Consumed {requiredSteelCost} Steel.");
         }
     }
 }

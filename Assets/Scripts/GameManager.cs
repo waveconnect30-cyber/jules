@@ -18,7 +18,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Core Game Manager orchestrating phase cycles and multi-city instance registry by cityID.
     /// Manages lookups for Reactors, Walls, and Warehouses per cityID to isolate independent city states.
-    /// Subscribes to OnCityFrozenSolid on the server to trigger city-specific defeat when a city's reactor freezes (-50°C).
+    /// Tracks per-city defeat status without ending the match for unaffected cities.
     /// </summary>
     public class GameManager : NetworkBehaviour
     {
@@ -35,10 +35,14 @@ namespace EcoDeLasCenizas.Gameplay
         private readonly Dictionary<int, CityWallHealthSync> registeredWalls = new Dictionary<int, CityWallHealthSync>();
         private readonly Dictionary<int, SharedInventorySync> registeredWarehouses = new Dictionary<int, SharedInventorySync>();
 
+        [Header("Isolated City Defeat Tracking")]
+        private readonly HashSet<int> defeatedCityIDs = new HashSet<int>();
+
         [Header("Events")]
         public UnityEvent<GamePhase> OnPhaseChanged;
         public UnityEvent OnTeamVictory;
         public UnityEvent<string> OnTeamDefeat;
+        public UnityEvent<int, string> OnCityDefeated;
 
         public GamePhase CurrentPhase => currentPhase;
         public float PhaseTimerRemaining => phaseTimer;
@@ -61,7 +65,7 @@ namespace EcoDeLasCenizas.Gameplay
         }
 
         /// <summary>
-        /// Registers or refreshes multi-city system lookups in scene and hooks server defeat listeners.
+        /// Registers multi-city system lookups in scene and hooks isolated server defeat listeners per cityID.
         /// </summary>
         public void RebuildMultiCityRegistries()
         {
@@ -74,13 +78,11 @@ namespace EcoDeLasCenizas.Gameplay
             {
                 registeredReactors[r.CityID] = r;
 
-                // Subscribe server to frozen solid defeat event for each city
-                int cityID = r.CityID;
+                int cID = r.CityID;
                 r.OnCityFrozenSolid.RemoveAllListeners();
                 r.OnCityFrozenSolid.AddListener(() =>
                 {
-                    Debug.LogError($"[GameManager SERVER] REACTOR FROZEN SOLID (-50°C) IN CITY {cityID}! TRIGGERING CITY DEFEAT.");
-                    TriggerTeamDefeat($"EL REACTOR DE LA CIUDAD {cityID} SE CONGELÓ COMPLETAMENTE (-50°C). LA CALDERA HA CAÍDO.");
+                    OnServerCityReactorFrozen(cID);
                 });
             }
 
@@ -97,6 +99,29 @@ namespace EcoDeLasCenizas.Gameplay
             }
 
             Debug.Log($"[GameManager SERVER] Multi-city registry rebuilt: {registeredReactors.Count} Reactors, {registeredWalls.Count} Walls, {registeredWarehouses.Count} Warehouses.");
+        }
+
+        [Server]
+        private void OnServerCityReactorFrozen(int cityID)
+        {
+            if (defeatedCityIDs.Contains(cityID)) return;
+
+            defeatedCityIDs.Add(cityID);
+            string reason = $"EL REACTOR DE LA CIUDAD {cityID} SE CONGELÓ COMPLETAMENTE (-50°C). LA CALDERA {cityID} HA CAÍDO.";
+            Debug.LogError($"[GameManager SERVER] CITY {cityID} DEFEATED: {reason}");
+
+            RpcNotifyCityDefeated(cityID, reason);
+
+            // If ALL registered cities are defeated, trigger global game over
+            if (defeatedCityIDs.Count >= registeredReactors.Count && registeredReactors.Count > 0)
+            {
+                TriggerTeamDefeat("TODAS LAS CALDERAS HAN SIDO CONGELADAS. LA HUMANIDAD HA CAÍDO.");
+            }
+        }
+
+        public bool IsCityDefeated(int cityID)
+        {
+            return defeatedCityIDs.Contains(cityID);
         }
 
         public ReactorManager GetReactorForCity(int cityID)
@@ -191,7 +216,7 @@ namespace EcoDeLasCenizas.Gameplay
             if (currentPhase == GamePhase.GameOver) return;
 
             currentPhase = GamePhase.GameOver;
-            Debug.LogError($"[GameManager SERVER] TEAM DEFEAT TRIGGERED: {reason}");
+            Debug.LogError($"[GameManager SERVER] ALL-CITIES GAME OVER TRIGGERED: {reason}");
             RpcNotifyTeamDefeat(reason);
         }
 
@@ -203,6 +228,13 @@ namespace EcoDeLasCenizas.Gameplay
             currentPhase = GamePhase.GameOver;
             Debug.Log("[GameManager SERVER] TEAM VICTORY! LA CALDERA SURVIVED THE WINTER STORM!");
             RpcNotifyTeamVictory();
+        }
+
+        [ClientRpc]
+        private void RpcNotifyCityDefeated(int cityID, string reason)
+        {
+            Debug.LogError($"[GameManager CLIENT] CITY {cityID} DEFEATED: {reason}");
+            OnCityDefeated?.Invoke(cityID, reason);
         }
 
         [ClientRpc]

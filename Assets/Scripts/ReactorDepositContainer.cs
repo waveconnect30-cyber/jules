@@ -8,7 +8,7 @@ namespace EcoDeLasCenizas.Gameplay
     /// <summary>
     /// Server-authoritative IInteractable reactor container.
     /// Identifies sender via connectionToClient, verifies interaction distance on Server,
-    /// and performs atomic transfer of carried Ignicita into reactor fuel.
+    /// validates reactor capacity BEFORE deducting player fuel, and preserves any unconsumed remainder.
     /// </summary>
     public class ReactorDepositContainer : NetworkBehaviour, IInteractable
     {
@@ -41,26 +41,40 @@ namespace EcoDeLasCenizas.Gameplay
                 return;
             }
 
-            // SERVER DISTANCE VALIDATION
+            // 1. SERVER DISTANCE VALIDATION
             float dist = Vector3.Distance(player.transform.position, transform.position);
             if (dist > maxInteractionDistance)
             {
-                Debug.LogWarning($"[ReactorDepositContainer SERVER] REJECTED deposit from {player.name}: Distance too far ({dist:F1}m > {maxInteractionDistance}m).");
+                Debug.LogWarning($"[ReactorDepositContainer SERVER] REJECTED deposit from {player.name}: Distance too far ({dist:F1}m > {maxInteractionDistance}m). Player resources preserved.");
                 return;
             }
 
-            float amountToDeposit = player.CarriedIgnicita;
+            // 2. RESOLVE REACTOR FIRST BEFORE DEDUCTING RESOURCES
+            ReactorManager reactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(targetCityID) : FindObjectOfType<ReactorManager>();
+            if (reactor == null)
+            {
+                Debug.LogWarning($"[ReactorDepositContainer SERVER] REJECTED deposit: Reactor for City {targetCityID} not found. Player resources preserved.");
+                return;
+            }
+
+            // 3. CALCULATE ACCEPTED CAPACITY BEFORE CONSUMPTION
+            float availableCapacity = Mathf.Max(0f, reactor.MaxIgnicita - reactor.CurrentIgnicita);
+            if (availableCapacity <= 0f)
+            {
+                Debug.LogWarning($"[ReactorDepositContainer SERVER] REJECTED deposit: Reactor for City {targetCityID} is already at max fuel capacity ({reactor.CurrentIgnicita}/{reactor.MaxIgnicita}). Player resources preserved.");
+                return;
+            }
+
+            float carried = player.CarriedIgnicita;
+            float amountToDeposit = Mathf.Min(carried, availableCapacity);
+
             if (amountToDeposit <= 0f) return;
 
-            // ATOMIC TRANSFER ON SERVER
+            // 4. DEDUCT ONLY THE ACCEPTED AMOUNT AND DEPOSIT ATOMICALLY
             player.ConsumeCarriedIgnicita(amountToDeposit);
+            reactor.DepositIgnicita(amountToDeposit, targetCityID);
 
-            ReactorManager reactor = GameManager.Instance != null ? GameManager.Instance.GetReactorForCity(targetCityID) : FindObjectOfType<ReactorManager>();
-            if (reactor != null)
-            {
-                reactor.DepositIgnicita(amountToDeposit, targetCityID);
-                Debug.Log($"[ReactorDepositContainer SERVER] ATOMIC DEPOSIT SUCCESS: Transferred {amountToDeposit} Ignicita from Player {player.name} to City {targetCityID} Reactor.");
-            }
+            Debug.Log($"[ReactorDepositContainer SERVER] ATOMIC DEPOSIT SUCCESS: Transferred {amountToDeposit} Ignicita from Player {player.name} (Carried remaining: {player.CarriedIgnicita}) to City {targetCityID} Reactor ({reactor.CurrentIgnicita}/{reactor.MaxIgnicita}).");
         }
     }
 }

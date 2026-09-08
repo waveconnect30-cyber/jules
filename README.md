@@ -5,7 +5,7 @@
 ---
 
 ## 📌 Referencia de Entrega
-**CODEX-EE3F79C-BASE-JUGABLE**
+**CODEX-5AC805E-GENERADOR-COMPLETO**
 
 ---
 
@@ -29,48 +29,49 @@ Para generar la escena y los prefabs reales con componentes nativos de Unity/Mir
 2. En la barra de menú superior, selecciona:
    `EcoDeLasCenizas -> Build Real Test Scene and Prefabs`
 3. Se generarán automáticamente:
-   - `Assets/Prefabs/PlayerPrefab.prefab` (Capsule + NetworkIdentity + NetworkTransform + PlayerController + PlayerStatsManager + ClassAbilities)
+   - `Assets/Prefabs/PlayerPrefab.prefab` (Capsule + NetworkIdentity + NetworkTransformUnreliable + PlayerController + PlayerStatsManager + ClassAbilities)
    - `Assets/Prefabs/ReactorPrefab.prefab` (Cylinder + NetworkIdentity + ReactorManager + ReactorDepositContainer)
    - `Assets/Prefabs/CityWallPrefab.prefab` (Cube + NetworkIdentity + CityWallHealthSync + CityWallRepairPanel)
    - `Assets/Prefabs/ResourceNodePrefab.prefab` (Sphere + NetworkIdentity + IgnicitaHarvestNode)
-   - `Assets/Scenes/TestScene.unity` (Light, Ground Plane, NetworkManagerHUD, GameManager, SpawnPoints)
+   - `Assets/Scenes/TestScene.unity` (Light, Ground Plane, Camera, AudioListener, NetworkManagerHUD, GameManager, Spanish Canvas HUD, SpawnPoints)
+4. `Assets/Scenes/TestScene.unity` se registrará en `EditorBuildSettings.scenes`.
 
 ---
 
-## 🔒 Autoridad de Servidor, Transacciones Atómicas y Seguridad
+## 🔒 Conservación Atómica de Recursos y Ejemplos Antes/Después
 
-1. **Autoridad y Sincronización del Jugador (`PlayerController.cs`):**
-   - Comandos de selección de clase trasladados a `PlayerController.cs` (`CmdSelectClass`).
-   - Movimiento, salto e interacciones protegidos por `isLocalPlayer` / `hasAuthority`.
-   - Sincronización de `currentHP`, `cityID`, clase e inventario mediante `[SyncVar]`.
-2. **Conservación Atómica de Recursos:**
-   - **Reactor Deposit (`ReactorDepositContainer.cs`):** Valida proximidad física y estado antes de descontar Ignicita del jugador.
-   - **Wall Repair (`CityWallRepairPanel.cs`):** Valida distancia y verifica que el almacén compartido de la ciudad tenga suficiente Acero antes de reparar. Si falla, conserva todos los materiales sin pérdidas.
-   - **Raiding (`CityLootManager.cs`):** Requiere brecha de muro o reactor congelado y valida distancia física antes de transferir Ignicita.
-3. **Seguridad en Chat y Filtro de Conexiones (`MultiChannelChat.cs`):**
-   - Identifica al emisor en el servidor vía `NetworkConnectionToClient`. Filtra los mensajes de canal de Ciudad y Alianza entregándolos vía `TargetRpc` a las conexiones autorizadas.
-4. **Asedio Continuo a la Capital (`WorldMapManager.cs`):**
-   - Bucle por tiempo en el servidor (`Update()`) comprobando la presencia física continua de los miembros del clan dentro del radio de la Ciudad Presidencial (0,0,0).
+### **1. Depósito de Ignicita al Reactor (`ReactorDepositContainer.cs`):**
+- **Validación Previa:** Se resuelve el `ReactorManager` objetivo, la distancia del jugador y la capacidad disponible (`MaxIgnicita - CurrentIgnicita`) **ANTES** de descontar cualquier recurso.
+- **Ejemplo Antes/Después:**
+  - *Jugador lleva 50 Ignicita; Reactor tiene capacidad restante de 30 Ignicita.*
+  - *Resultado:* Se transfieren 30 Ignicita al reactor y el jugador conserva los 20 Ignicita restantes.
+  - *Si el jugador está fuera de distancia o el reactor está lleno:* Se cancela el comando sin descontar nada (conserva 50 Ignicita).
 
----
-
-## 📝 Lista de Puntos Pendientes Documentados (Próxima Iteración)
-
-1. **Compilación y Pruebas Binarias en Editor Unity:** Ejecutar MenuItem `Build Real Test Scene and Prefabs` en Unity 2022.3.10f1 para generar metadatos binarios finales `.meta` y realizar prueba de 2 ejecutable (.exe / .apk).
-2. **Asedio a la Capital - Distancia en Interacción:** `CmdInitiateCapitalSiege` utiliza presencia física continua en área (0,0,0); se agregará resolución explícita de disputas si coinciden dos clanes en el área.
-3. **Incursiones de Saqueo - Proximidad a Caldera:** `CmdInitiateCityRaid` mide proximidad física al gestor; se ajustará a la collider específica del almacén de la ciudad objetivo.
-4. **Persistencia Avanzada de Temporada:** `SeasonManager` guarda `SeasonCompleted` y `LastGovernorCityID` en `PlayerPrefs`; se migrará a base de datos remota JSON/SQL.
+### **2. Reparación de Muralla (`CityWallRepairPanel.cs`):**
+- **Validación Previa:** Se resuelve la muralla y se verifica que `currentHP < maxHP` **ANTES** de cobrarse el Acero del almacén.
+- **Ejemplo Antes/Después:**
+  - *Muralla tiene 4800 / 5000 HP; Almacén posee 50 Acero (Costo: 10 Acero).*
+  - *Resultado:* Se descuentan 10 Acero y la muralla se repara a 5000 / 5000 HP.
+  - *Si la muralla ya está al 100% (5000/5000 HP) o el almacén no tiene Acero:* La reparación se rechaza y el almacén conserva íntegros sus 50 Acero.
 
 ---
 
-## 📂 Estructura del Código C# (31 Scripts en `Assets/Scripts/`)
+## 📝 Lista de Puntos Pendientes Documentados (Próxima Iteración Local)
+
+1. **Ejecución Local de Unity 2022.3 y Weaver:** La generación de metadatos `.meta` binarios finales y la compilación del Mirror Weaver dependen de abrir el proyecto e invocar el MenuItem en Unity 2022.3 LTS local.
+2. **Pruebas de Conexión de 2 Procesos (Host / Cliente Remoto):** La verificación de interacción física a distancia y sincronización en ejecutable `.exe` / `.apk` requiere ejecutar dos instancias locales en Unity.
+
+---
+
+## 📂 Estructura del Código C# (32 Scripts en `Assets/Scripts/` y `Assets/Editor/`)
 
 | Script | Descripción y Función Principal |
 | :--- | :--- |
+| `BuildTestSceneAndPrefabs.cs` | Script Editor ejecutable que construye la escena `TestScene.unity` y los 4 prefabs de red reales. |
 | `IInteractable.cs` | Interfaz limpia para objetos interactivos en el mundo 3D. |
 | `IgnicitaHarvestNode.cs` | Nodo de recolección de Ignicita validado en servidor por distancia. |
-| `ReactorDepositContainer.cs` | Depósito atómico de combustible al reactor por `[Command]` en servidor. |
-| `CityWallRepairPanel.cs` | Panel de reparación de murallas que verifica y descuenta Acero en servidor. |
+| `ReactorDepositContainer.cs` | Depósito atómico de combustible que valida capacidad y conserva el sobrante del jugador. |
+| `CityWallRepairPanel.cs` | Panel de reparación que verifica necesidad de HP antes de cobrar Acero del almacén. |
 | `AssetPrefabLinker.cs` | Gestión de carpetas `Assets/Art/` (Models, Textures, Prefabs) y asignación dinámica de modelos 3D. |
 | `AndroidPermissionsManager.cs` | Gestión de permisos runtime en Android (`UnityEngine.Android.Permission`) y alerta UI. |
 | `TouchScreenHUD.cs` | UI móvil táctil con Joystick virtual y botones para salto, interacción y habilidades. |
@@ -97,4 +98,4 @@ Para generar la escena y los prefabs reales con componentes nativos de Unity/Mir
 | `CouncilVotingManager.cs` | Votos de Concejo firmados por `connectionId` validando clase en servidor contra votos duplicados. |
 | `EnemyAI.cs` | IA en NavMesh para Sombras Heladas que ataca el muro más debilitado. |
 | `NetworkLobbyManager.cs` | Creación y gestión de salas multijugador de 4 a 8 jugadores. |
-| `GameManager.cs` | Registro de sistemas multi-ciudad por `cityID`, gestor de fases en servidor y condiciones de derrota por congelamiento. |
+| `GameManager.cs` | Registro de sistemas multi-ciudad por `cityID`, derrota aislada por ciudad (`OnServerCityReactorFrozen`) y gestor de fases. |

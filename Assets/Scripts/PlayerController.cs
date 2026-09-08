@@ -55,6 +55,10 @@ namespace EcoDeLasCenizas.Player
         private void Awake()
         {
             characterController = GetComponent<CharacterController>();
+            if (interactableLayerMask.value == 0)
+            {
+                interactableLayerMask = ~0; // Default to all layers if unassigned
+            }
         }
 
         private void Start()
