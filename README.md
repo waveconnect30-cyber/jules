@@ -12,6 +12,8 @@
 ## 📄 Documentación del Proyecto
 
 - 📖 **Game Design Document (GDD PvPvE):** [`GDD_Eco_de_las_Cenizas.md`](./GDD_Eco_de_las_Cenizas.md)
+- 📖 **GDD Técnico Whiteout Survival (Génesis a Revelación):** [`docs/GDD_Tecnico_Whiteout_Survival.md`](./docs/GDD_Tecnico_Whiteout_Survival.md)
+- 🗄️ **Esquema de Base de Datos (Supabase / PostgreSQL SQL):** [`docs/schema.sql`](./docs/schema.sql)
 - 📊 **Especificaciones Técnicas:** [`docs/Technical_Specifications.md`](./docs/Technical_Specifications.md)
 - ⚙️ **Dependencias Unity (Packages):** [`Packages/manifest.json`](./Packages/manifest.json)
 - ⚙️ **Versión de Unity Editor:** [`ProjectSettings/ProjectVersion.txt`](./ProjectSettings/ProjectVersion.txt) (`6000.5.10f1`)

@@ -5,6 +5,12 @@ Documento de referencia para el equipo de desarrollo, arquitectura multijugador,
 
 ---
 
+## Documentación Técnica y Esquema de Datos Relacionados
+- **GDD Técnico Completo (Génesis a Revelación):** [`docs/GDD_Tecnico_Whiteout_Survival.md`](./GDD_Tecnico_Whiteout_Survival.md)
+- **Esquema SQL de Base de Datos (PostgreSQL / Supabase):** [`docs/schema.sql`](./schema.sql)
+
+---
+
 ## 1. Arquitectura de Red y Sincronización Multijugador
 
 | Parámetro | Especificación Técnica | Detalles de Implementación |
